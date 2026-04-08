@@ -51,9 +51,9 @@ function DashboardContent() {
         <header className="flex-shrink-0 bg-white border-b border-border px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663309569596/OnnnmFKgchOrSoVP.png"
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663031272139/nMBkaAmAqguAoZSh.webp"
               alt="Evoluir SST"
-              className="w-10 h-10 object-contain"
+              className="h-10 w-auto object-contain"
             />
             <div>
               <h1
