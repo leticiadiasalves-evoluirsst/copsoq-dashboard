@@ -949,6 +949,125 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
     14, y, W - 28, 4.5
   );
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SEÇÕES POR SETOR
+  // ═══════════════════════════════════════════════════════════════════════════
+  const setores = [...new Set(respondents.map((r) => r.setor).filter(Boolean))].sort();
+
+  function drawGroupSection(groupLabel: string, groupType: string, groupRespondents: typeof respondents) {
+    const groupScores = calcAllScores(groupRespondents);
+    const gGreen = groupScores.filter((s) => s.riskLevel === "green").length;
+    const gAmber = groupScores.filter((s) => s.riskLevel === "amber").length;
+    const gRed = groupScores.filter((s) => s.riskLevel === "red").length;
+
+    addPage(doc);
+
+    // Header
+    drawRect(doc, 0, 0, W, 16, C.primary);
+    setFont(doc, "bold", 11);
+    setColor(doc, C.white);
+    doc.text(`${groupType}: ${groupLabel}`, 14, 11);
+    setFont(doc, "normal", 8);
+    setColor(doc, [219, 234, 254] as RGB);
+    doc.text(`${groupRespondents.length} respondente(s)`, W - 14, 11, { align: "right" });
+
+    // KPI cards
+    const gCardY = 24;
+    const gCardH = 24;
+    const gCardW = (W - 28 - 9) / 4;
+    const gCards = [
+      { label: "Respondentes", value: String(groupRespondents.length), sub: "Questionários válidos", color: C.primary, bg: [239, 246, 255] as RGB },
+      { label: "Situação Favorável", value: String(gGreen), sub: "Dimensões sem risco", color: C.green, bg: C.greenBg },
+      { label: "Situação Intermédia", value: String(gAmber), sub: "Dimensões de atenção", color: C.amber, bg: C.amberBg },
+      { label: "Risco para a Saúde", value: String(gRed), sub: "Dimensões críticas", color: C.red, bg: C.redBg },
+    ];
+    gCards.forEach((card, i) => {
+      const x = 14 + i * (gCardW + 3);
+      drawRect(doc, x, gCardY, gCardW, gCardH, card.bg, C.border);
+      setFont(doc, "bold", 14);
+      setColor(doc, card.color);
+      doc.text(card.value, x + gCardW / 2, gCardY + 9, { align: "center" });
+      setFont(doc, "bold", 7);
+      setColor(doc, C.dark);
+      doc.text(card.label, x + gCardW / 2, gCardY + 15, { align: "center" });
+      setFont(doc, "normal", 6);
+      setColor(doc, C.mid);
+      doc.text(card.sub, x + gCardW / 2, gCardY + 20, { align: "center" });
+    });
+
+    // Gráfico de barras por dimensão
+    let gy = gCardY + gCardH + 10;
+    setFont(doc, "bold", 10);
+    setColor(doc, C.dark);
+    doc.text("Resultados por Dimensão", 14, gy);
+    drawLine(doc, 14, gy + 2, W - 14, gy + 2, C.border, 0.3);
+    gy += 8;
+
+    const gBarAreaX = 60;
+    const gBarAreaW = W - gBarAreaX - 14;
+    const gBarH = 5;
+    const gBarGap = 1.8;
+    const gMaxVal = 5;
+
+    // Scale lines
+    [1, 2, 3, 4, 5].forEach((v) => {
+      const bx = gBarAreaX + (v / gMaxVal) * gBarAreaW;
+      drawLine(doc, bx, gy - 2, bx, gy + groupScores.length * (gBarH + gBarGap) + 2, C.border, 0.2);
+      setFont(doc, "normal", 6);
+      setColor(doc, C.light);
+      doc.text(String(v), bx, gy - 3.5, { align: "center" });
+    });
+
+    // Threshold lines
+    const gThreshLow = gBarAreaX + (2.33 / gMaxVal) * gBarAreaW;
+    const gThreshHigh = gBarAreaX + (3.66 / gMaxVal) * gBarAreaW;
+    const gChartBottom = gy + groupScores.length * (gBarH + gBarGap);
+    drawLine(doc, gThreshLow, gy - 2, gThreshLow, gChartBottom + 2, C.amber, 0.4);
+    drawLine(doc, gThreshHigh, gy - 2, gThreshHigh, gChartBottom + 2, C.red, 0.4);
+
+    groupScores.forEach((s, i) => {
+      const by = gy + i * (gBarH + gBarGap);
+      const barW = (s.score / gMaxVal) * gBarAreaW;
+      const refW = (s.dimension.refMean / gMaxVal) * gBarAreaW;
+      const color = riskColor(s.riskLevel);
+      if (i % 2 === 0) drawRect(doc, 14, by - 0.5, W - 28, gBarH + 1, C.bg);
+      setFont(doc, "normal", 6.5);
+      setColor(doc, C.dark);
+      const name = s.dimension.name.length > 26 ? s.dimension.name.slice(0, 25) + "…" : s.dimension.name;
+      doc.text(name, gBarAreaX - 2, by + gBarH - 1, { align: "right" });
+      drawRect(doc, gBarAreaX, by, gBarAreaW, gBarH, [241, 245, 249] as RGB);
+      drawRect(doc, gBarAreaX, by, barW, gBarH, color);
+      doc.setFillColor(C.light[0], C.light[1], C.light[2]);
+      doc.circle(gBarAreaX + refW, by + gBarH / 2, 1, "F");
+      setFont(doc, "bold", 6);
+      setColor(doc, color);
+      doc.text(s.score.toFixed(2), gBarAreaX + barW + 1.5, by + gBarH - 1);
+    });
+  }
+
+  if (setores.length > 0) {
+    setores.forEach((setor) => {
+      const setorRespondents = respondents.filter((r) => r.setor === setor);
+      if (setorRespondents.length > 0) {
+        drawGroupSection(setor, "Setor", setorRespondents);
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SEÇÕES POR FUNÇÃO
+  // ═══════════════════════════════════════════════════════════════════════════
+  const funcoes = [...new Set(respondents.map((r) => r.funcao).filter(Boolean))].sort();
+
+  if (funcoes.length > 0) {
+    funcoes.forEach((funcao) => {
+      const funcaoRespondents = respondents.filter((r) => r.funcao === funcao);
+      if (funcaoRespondents.length > 0) {
+        drawGroupSection(funcao, "Função", funcaoRespondents);
+      }
+    });
+  }
+
   // Add footers to all pages dynamically
   addFootersToAllPages(doc);
 
