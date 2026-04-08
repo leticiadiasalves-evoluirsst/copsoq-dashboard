@@ -175,33 +175,59 @@ function drawRadarChart(
   }
   doc.setLineDashPattern([], 0);
 
-  // Score polygon
+  // Score polygon — translucent fill (light blue) + dark blue border
   const scorePts = radarScores.map((s, i) => polar(s.score, i));
-  // Fill
   const scorePathX = scorePts.map((p) => p.x);
   const scorePathY = scorePts.map((p) => p.y);
-  doc.setFillColor(59, 130, 246);
-  doc.setDrawColor(30, 64, 175);
-  doc.setLineWidth(0.6);
-  // Draw filled polygon manually
+
+  // Draw white triangles first (background cleanup)
   for (let i = 0; i < scorePts.length; i++) {
     const next = scorePts[(i + 1) % scorePts.length];
-    doc.line(scorePts[i].x, scorePts[i].y, next.x, next.y);
-  }
-  // Fill using triangle fan from center
-  doc.setFillColor(59, 130, 246, 0.3);
-  for (let i = 0; i < scorePts.length; i++) {
-    const next = scorePts[(i + 1) % scorePts.length];
-    doc.setFillColor(147, 197, 253);
+    doc.setFillColor(255, 255, 255);
     doc.triangle(cx, cy, scorePts[i].x, scorePts[i].y, next.x, next.y, "F");
   }
-  // Redraw outline on top
-  doc.setDrawColor(30, 64, 175);
-  doc.setLineWidth(0.7);
+  // Draw light blue translucent fill (simulate with very light blue)
+  for (let i = 0; i < scorePts.length; i++) {
+    const next = scorePts[(i + 1) % scorePts.length];
+    doc.setFillColor(214, 229, 252); // light blue ~rgba(59,130,246,0.2)
+    doc.triangle(cx, cy, scorePts[i].x, scorePts[i].y, next.x, next.y, "F");
+  }
+  // Redraw grid on top of fill so it shows through
+  [1, 2, 3, 4, 5].forEach((level) => {
+    const r = ((level - minVal) / range) * radius;
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.circle(cx, cy, r, "S");
+  });
+  radarScores.forEach((_, i) => {
+    const end = polar(maxVal, i);
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(cx, cy, end.x, end.y);
+  });
+  // Redraw reference polygon on top
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.5);
+  for (let i = 0; i < refPts.length; i++) {
+    const next = refPts[(i + 1) % refPts.length];
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(refPts[i].x, refPts[i].y, next.x, next.y);
+  }
+  doc.setLineDashPattern([], 0);
+  // Draw score outline (dark blue border)
+  doc.setDrawColor(37, 99, 235);
+  doc.setLineWidth(0.8);
   for (let i = 0; i < scorePts.length; i++) {
     const next = scorePts[(i + 1) % scorePts.length];
     doc.line(scorePts[i].x, scorePts[i].y, next.x, next.y);
   }
+  // Dots at vertices
+  doc.setFillColor(37, 99, 235);
+  scorePts.forEach((p) => {
+    doc.circle(p.x, p.y, 0.8, "F");
+  });
+
+  void scorePathX; void scorePathY;
 
   // Labels
   radarScores.forEach((s, i) => {
