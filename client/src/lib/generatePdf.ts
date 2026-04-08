@@ -457,21 +457,11 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
   // Header band
   drawRect(doc, 0, 0, W, 55, C.primary);
 
-  // Logo area
-  if (logoBase64) {
-    doc.addImage(logoBase64, "PNG", 14, 8, 24, 24);
-  } else {
-    drawRect(doc, 14, 10, 22, 22, [59, 130, 246] as RGB);
-    setFont(doc, "bold", 14);
-    setColor(doc, C.white);
-    doc.text("C2", 25, 24, { align: "center" });
-  }
-
   setFont(doc, "bold", 18);
   setColor(doc, C.white);
-  doc.text("Painel de Avaliacao Psicossocial", 42, 20);
+  doc.text("Painel de Avaliacao Psicossocial", 14, 22);
   setFont(doc, "normal", 10);
-  doc.text("NR-17 - Metodologia COPSOQ II - Versao Portuguesa", 42, 27);
+  doc.text("NR-17 - Metodologia COPSOQ II - Versao Portuguesa", 14, 30);
 
   // Divider line inside header
   drawLine(doc, 14, 38, W - 14, 38, [147, 197, 253] as RGB, 0.4);
