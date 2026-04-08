@@ -125,6 +125,100 @@ function drawJustified(
   return cy;
 }
 
+// ─── Radar chart helper ──────────────────────────────────────────────────────
+function drawRadarChart(
+  doc: jsPDF,
+  scores: DimensionScore[],
+  cx: number,
+  cy: number,
+  radius: number
+): void {
+  const radarScores = scores.slice(0, 12);
+  const n = radarScores.length;
+  if (n === 0) return;
+  const minVal = 1;
+  const maxVal = 5;
+  const range = maxVal - minVal;
+  const angleStep = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+
+  const polar = (val: number, i: number) => {
+    const r = ((val - minVal) / range) * radius;
+    const angle = startAngle + i * angleStep;
+    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  };
+
+  // Grid circles
+  [1, 2, 3, 4, 5].forEach((level) => {
+    const r = ((level - minVal) / range) * radius;
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.circle(cx, cy, r, "S");
+  });
+
+  // Axis lines
+  radarScores.forEach((_, i) => {
+    const end = polar(maxVal, i);
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(cx, cy, end.x, end.y);
+  });
+
+  // Reference polygon (dashed)
+  const refPts = radarScores.map((s, i) => polar(s.dimension.refMean, i));
+  doc.setDrawColor(148, 163, 184);
+  doc.setLineWidth(0.5);
+  for (let i = 0; i < refPts.length; i++) {
+    const next = refPts[(i + 1) % refPts.length];
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(refPts[i].x, refPts[i].y, next.x, next.y);
+  }
+  doc.setLineDashPattern([], 0);
+
+  // Score polygon
+  const scorePts = radarScores.map((s, i) => polar(s.score, i));
+  // Fill
+  const scorePathX = scorePts.map((p) => p.x);
+  const scorePathY = scorePts.map((p) => p.y);
+  doc.setFillColor(59, 130, 246);
+  doc.setDrawColor(30, 64, 175);
+  doc.setLineWidth(0.6);
+  // Draw filled polygon manually
+  for (let i = 0; i < scorePts.length; i++) {
+    const next = scorePts[(i + 1) % scorePts.length];
+    doc.line(scorePts[i].x, scorePts[i].y, next.x, next.y);
+  }
+  // Fill using triangle fan from center
+  doc.setFillColor(59, 130, 246, 0.3);
+  for (let i = 0; i < scorePts.length; i++) {
+    const next = scorePts[(i + 1) % scorePts.length];
+    doc.setFillColor(147, 197, 253);
+    doc.triangle(cx, cy, scorePts[i].x, scorePts[i].y, next.x, next.y, "F");
+  }
+  // Redraw outline on top
+  doc.setDrawColor(30, 64, 175);
+  doc.setLineWidth(0.7);
+  for (let i = 0; i < scorePts.length; i++) {
+    const next = scorePts[(i + 1) % scorePts.length];
+    doc.line(scorePts[i].x, scorePts[i].y, next.x, next.y);
+  }
+
+  // Labels
+  radarScores.forEach((s, i) => {
+    const angle = startAngle + i * angleStep;
+    const labelR = radius * 1.22;
+    const lx = cx + labelR * Math.cos(angle);
+    const ly = cy + labelR * Math.sin(angle);
+    const shortName = s.dimension.name.length > 14 ? s.dimension.name.slice(0, 13) + "…" : s.dimension.name;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(shortName, lx, ly, { align: "center", baseline: "middle" });
+  });
+
+  void scorePathX; void scorePathY;
+}
+
 // ─── Group inventory helpers ─────────────────────────────────────────────────
 interface GroupInventoryRow {
   groupValue: string;
@@ -535,6 +629,39 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
     });
     y += 7;
   });
+
+  // ── Radar chart (Perfil Psicossocial) ────────────────────────────────────────
+  y += 10;
+  addPage(doc);
+  drawRect(doc, 0, 0, W, 16, C.primary);
+  setFont(doc, "bold", 11);
+  setColor(doc, C.white);
+  doc.text("Perfil Psicossocial", 14, 11);
+  setFont(doc, "normal", 8);
+  setColor(doc, [219, 234, 254] as RGB);
+  doc.text("Comparação das principais dimensões (escala 1–5)", W - 14, 11, { align: "right" });
+
+  {
+    const radarCx = W / 2;
+    const radarCy = 120;
+    const radarR = 70;
+    drawRadarChart(doc, scores, radarCx, radarCy, radarR);
+
+    // Legend
+    const legY = radarCy + radarR + 22;
+    drawRect(doc, W/2 - 30, legY - 3, 8, 3, [147, 197, 253] as RGB);
+    setFont(doc, "normal", 7);
+    setColor(doc, C.mid);
+    doc.text("Empresa", W/2 - 20, legY);
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineWidth(0.5);
+    doc.setLineDashPattern([1,1], 0);
+    doc.line(W/2 + 10, legY - 1.5, W/2 + 18, legY - 1.5);
+    doc.setLineDashPattern([], 0);
+    doc.text("Ref. nacional", W/2 + 20, legY);
+
+    y = legY + 10;
+  }
 
   // ── Filters info ───────────────────────────────────────────────────────────
   y += 6;
@@ -995,8 +1122,48 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
       doc.text(card.sub, x + gCardW / 2, gCardY + 20, { align: "center" });
     });
 
-    // Gráfico de barras por dimensão
+    // Radar chart (Perfil Psicossocial) do grupo
+    {
+      const radarCx = W / 2;
+      const radarCy = gCardY + gCardH + 75;
+      const radarR = 55;
+
+      setFont(doc, "bold", 10);
+      setColor(doc, C.dark);
+      doc.text("Perfil Psicossocial", 14, gCardY + gCardH + 10);
+      setFont(doc, "normal", 7);
+      setColor(doc, C.mid);
+      doc.text("Comparação das principais dimensões (escala 1–5)", 14, gCardY + gCardH + 16);
+      drawLine(doc, 14, gCardY + gCardH + 18, W - 14, gCardY + gCardH + 18, C.border, 0.3);
+
+      drawRadarChart(doc, groupScores, radarCx, radarCy, radarR);
+
+      // Legend
+      const legY = radarCy + radarR + 18;
+      drawRect(doc, W/2 - 30, legY - 3, 8, 3, [147, 197, 253] as RGB);
+      setFont(doc, "normal", 7);
+      setColor(doc, C.mid);
+      doc.text("Empresa", W/2 - 20, legY);
+      doc.setDrawColor(148, 163, 184);
+      doc.setLineWidth(0.5);
+      doc.setLineDashPattern([1,1], 0);
+      doc.line(W/2 + 10, legY - 1.5, W/2 + 18, legY - 1.5);
+      doc.setLineDashPattern([], 0);
+      doc.text("Ref. nacional", W/2 + 20, legY);
+    }
+
+    // Gráfico de barras por dimensão (nova página)
+    addPage(doc);
+    drawRect(doc, 0, 0, W, 16, C.primary);
+    setFont(doc, "bold", 11);
+    setColor(doc, C.white);
+    doc.text(`${groupType}: ${groupLabel} — Dimensões`, 14, 11);
+    setFont(doc, "normal", 8);
+    setColor(doc, [219, 234, 254] as RGB);
+    doc.text(`${groupRespondents.length} respondente(s)`, W - 14, 11, { align: "right" });
+
     let gy = gCardY + gCardH + 10;
+    gy = 24;
     setFont(doc, "bold", 10);
     setColor(doc, C.dark);
     doc.text("Resultados por Dimensão", 14, gy);
