@@ -226,8 +226,8 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
   // ═══════════════════════════════════════════════════════════════════════════
   // PAGE 0 — CAPA PROFISSIONAL
   // ═══════════════════════════════════════════════════════════════════════════
-  const EVOLUIR_GREEN: RGB = [58, 170, 140];
-  const EVOLUIR_DARK: RGB = [30, 80, 65];
+  const EVOLUIR_GREEN: RGB = [30, 64, 175];
+  const EVOLUIR_DARK: RGB = [15, 40, 120];
 
   // Fundo branco com barra verde no topo e rodapé
   drawRect(doc, 0, 0, W, H, C.white);
@@ -269,14 +269,14 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
 
   // Linha divisória
   coverY += 12;
-  drawLine(doc, 30, coverY, W - 30, coverY, EVOLUIR_GREEN, 0.8);
+  drawLine(doc, 30, coverY, W - 30, coverY, [147, 197, 253] as RGB, 0.8);
 
   // Caixa com informações da empresa
   coverY += 16;
   const boxX = 30;
   const boxW = W - 60;
   const boxH = 70;
-  drawRect(doc, boxX, coverY, boxW, boxH, [245, 252, 250] as RGB, EVOLUIR_GREEN);
+  drawRect(doc, boxX, coverY, boxW, boxH, [239, 246, 255] as RGB, EVOLUIR_GREEN);
 
   // Cabeçalho da caixa
   drawRect(doc, boxX, coverY, boxW, 10, EVOLUIR_GREEN);

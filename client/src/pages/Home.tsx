@@ -69,9 +69,6 @@ function DashboardContent() {
           </div>
           <div className="flex items-center gap-2">
             <ExportPdfButton />
-            <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
-              Dados de exemplo carregados
-            </span>
           </div>
         </header>
 
