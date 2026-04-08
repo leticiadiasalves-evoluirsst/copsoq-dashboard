@@ -85,7 +85,7 @@ interface DashboardContextValue {
 const DashboardContext = createContext<DashboardContextValue | null>(null);
 
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
-  const [respondents, setRespondents] = useState<Respondent[]>(SAMPLE_RESPONDENTS);
+  const [respondents, setRespondents] = useState<Respondent[]>([]);
   const [filters, setFilters] = useState<Filters>({
     empresa: "",
     setor: "",

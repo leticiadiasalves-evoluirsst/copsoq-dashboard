@@ -201,12 +201,18 @@ export interface PdfReportOptions {
   filters: { empresa: string; setor: string; funcao: string };
   empresas: string[];
   respondents: Respondent[];
+  coverInfo?: {
+    empresaNome: string;
+    cnpj: string;
+    dataRelatorio: string;
+    responsavel: string;
+  };
 }
 
 
 
 export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
-  const { scores, totalRespondents, greenCount, amberCount, redCount, filters, empresas, respondents } = opts;
+  const { scores, totalRespondents, greenCount, amberCount, redCount, filters, empresas, respondents, coverInfo } = opts;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();   // 210
   const H = doc.internal.pageSize.getHeight();  // 297
@@ -218,8 +224,101 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
   const empresaLabel = filters.empresa || (empresas.length === 1 ? empresas[0] : "Todas as empresas");
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // PAGE 0 — CAPA PROFISSIONAL
+  // ═══════════════════════════════════════════════════════════════════════════
+  const EVOLUIR_GREEN: RGB = [58, 170, 140];
+  const EVOLUIR_DARK: RGB = [30, 80, 65];
+
+  // Fundo branco com barra verde no topo e rodapé
+  drawRect(doc, 0, 0, W, H, C.white);
+  // Barra superior verde
+  drawRect(doc, 0, 0, W, 60, EVOLUIR_GREEN);
+  // Barra inferior verde
+  drawRect(doc, 0, H - 30, W, 30, EVOLUIR_GREEN);
+  // Linha decorativa
+  drawRect(doc, 0, 60, W, 3, EVOLUIR_DARK);
+
+  // Logo EvoluirSST no topo
+  if (logoBase64) {
+    // Calcular posição centralizada para o logo
+    const logoW = 80;
+    const logoH = 28;
+    const logoX = (W - logoW) / 2;
+    doc.addImage(logoBase64, "PNG", logoX, 14, logoW, logoH);
+  } else {
+    setFont(doc, "bold", 20);
+    setColor(doc, C.white);
+    doc.text("EvoluirSST", W / 2, 35, { align: "center" });
+  }
+
+  // Título principal
+  setFont(doc, "bold", 22);
+  setColor(doc, EVOLUIR_DARK);
+  const titleLines = doc.splitTextToSize("Relatório de Avaliação Psicossocial COPSOQ II", W - 40);
+  let coverY = 90;
+  titleLines.forEach((line: string) => {
+    doc.text(line, W / 2, coverY, { align: "center" });
+    coverY += 10;
+  });
+
+  // Subtítulo
+  coverY += 4;
+  setFont(doc, "normal", 12);
+  setColor(doc, C.mid);
+  doc.text("NR-17 · Metodologia COPSOQ II · Versão Portuguesa", W / 2, coverY, { align: "center" });
+
+  // Linha divisória
+  coverY += 12;
+  drawLine(doc, 30, coverY, W - 30, coverY, EVOLUIR_GREEN, 0.8);
+
+  // Caixa com informações da empresa
+  coverY += 16;
+  const boxX = 30;
+  const boxW = W - 60;
+  const boxH = 70;
+  drawRect(doc, boxX, coverY, boxW, boxH, [245, 252, 250] as RGB, EVOLUIR_GREEN);
+
+  // Cabeçalho da caixa
+  drawRect(doc, boxX, coverY, boxW, 10, EVOLUIR_GREEN);
+  setFont(doc, "bold", 9);
+  setColor(doc, C.white);
+  doc.text("INFORMAÇÕES DO RELATÓRIO", W / 2, coverY + 7, { align: "center" });
+
+  const infoY = coverY + 18;
+  const labelX = boxX + 8;
+  const valueX = boxX + 50;
+
+  const infoRows = [
+    { label: "Empresa Avaliada:", value: coverInfo?.empresaNome || empresaLabel },
+    { label: "CNPJ:", value: coverInfo?.cnpj || "—" },
+    { label: "Data do Relatório:", value: coverInfo?.dataRelatorio || dateStr },
+    { label: "Responsável:", value: coverInfo?.responsavel || "—" },
+  ];
+
+  infoRows.forEach((row, i) => {
+    const rowY = infoY + i * 13;
+    setFont(doc, "bold", 9);
+    setColor(doc, EVOLUIR_DARK);
+    doc.text(row.label, labelX, rowY);
+    setFont(doc, "normal", 9);
+    setColor(doc, C.dark);
+    doc.text(row.value, valueX, rowY);
+    if (i < infoRows.length - 1) {
+      drawLine(doc, labelX, rowY + 3, boxX + boxW - 8, rowY + 3, C.border, 0.2);
+    }
+  });
+
+  // Rodapé da capa
+  setFont(doc, "normal", 8);
+  setColor(doc, C.white);
+  doc.text("Segurança e Saúde no Trabalho", W / 2, H - 18, { align: "center" });
+  setFont(doc, "normal", 7);
+  doc.text("www.evoluirsst.com.br", W / 2, H - 11, { align: "center" });
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // PAGE 1 — INTRODUÇÃO / METODOLOGIA (primeira página do relatório)
   // ═══════════════════════════════════════════════════════════════════════════
+  addPage(doc);
 
   // Page header
   drawRect(doc, 0, 0, W, 16, C.primary);
