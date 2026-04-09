@@ -209,10 +209,10 @@ function drawRadarChart(
     const labelR = radius * 1.22;
     const lx = cx + labelR * Math.cos(angle);
     const ly = cy + labelR * Math.sin(angle);
-    const shortName = s.dimension.name.length > 14 ? s.dimension.name.slice(0, 13) + "…" : s.dimension.name;
+    const shortName = s.dimension.name;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.5);
-    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(6.5);
+    doc.setTextColor(50, 60, 80);
     doc.text(shortName, lx, ly, { align: "center", baseline: "middle" });
   });
 
@@ -643,8 +643,8 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
 
   {
     const radarCx = W / 2;
-    const radarCy = 120;
-    const radarR = 70;
+    const radarCy = 125;
+    const radarR = 60;
     drawRadarChart(doc, scores, radarCx, radarCy, radarR);
 
     // Legend
@@ -1134,8 +1134,8 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
     {
       const H = doc.internal.pageSize.getHeight();
       const radarCx = W / 2;
-      const radarCy = H / 2 - 10;
-      const radarR = 75;
+      const radarCy = H / 2 - 5;
+      const radarR = 60;
 
       drawRadarChart(doc, groupScores, radarCx, radarCy, radarR);
 
