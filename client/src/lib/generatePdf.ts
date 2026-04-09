@@ -148,84 +148,58 @@ function drawRadarChart(
     return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
   };
 
-  // Grid circles
-  [1, 2, 3, 4, 5].forEach((level) => {
-    const r = ((level - minVal) / range) * radius;
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.2);
-    doc.circle(cx, cy, r, "S");
-  });
-
-  // Axis lines
-  radarScores.forEach((_, i) => {
-    const end = polar(maxVal, i);
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.2);
-    doc.line(cx, cy, end.x, end.y);
-  });
-
-  // Reference polygon (dashed)
+  // Compute points
   const refPts = radarScores.map((s, i) => polar(s.dimension.refMean, i));
-  doc.setDrawColor(148, 163, 184);
-  doc.setLineWidth(0.5);
-  for (let i = 0; i < refPts.length; i++) {
-    const next = refPts[(i + 1) % refPts.length];
-    doc.setLineDashPattern([1, 1], 0);
-    doc.line(refPts[i].x, refPts[i].y, next.x, next.y);
-  }
-  doc.setLineDashPattern([], 0);
-
-  // Score polygon — translucent fill (light blue) + dark blue border
   const scorePts = radarScores.map((s, i) => polar(s.score, i));
   const scorePathX = scorePts.map((p) => p.x);
   const scorePathY = scorePts.map((p) => p.y);
 
-  // Draw white triangles first (background cleanup)
+  // STEP 1: Draw score fill (light blue) FIRST — below everything
   for (let i = 0; i < scorePts.length; i++) {
     const next = scorePts[(i + 1) % scorePts.length];
-    doc.setFillColor(255, 255, 255);
+    doc.setFillColor(220, 234, 253); // very light blue, simulates translucency
     doc.triangle(cx, cy, scorePts[i].x, scorePts[i].y, next.x, next.y, "F");
   }
-  // Draw light blue translucent fill (simulate with very light blue)
-  for (let i = 0; i < scorePts.length; i++) {
-    const next = scorePts[(i + 1) % scorePts.length];
-    doc.setFillColor(214, 229, 252); // light blue ~rgba(59,130,246,0.2)
-    doc.triangle(cx, cy, scorePts[i].x, scorePts[i].y, next.x, next.y, "F");
-  }
-  // Redraw grid on top of fill so it shows through
+
+  // STEP 2: Draw grid circles on top of fill
   [1, 2, 3, 4, 5].forEach((level) => {
     const r = ((level - minVal) / range) * radius;
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.2);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.25);
     doc.circle(cx, cy, r, "S");
   });
+
+  // STEP 3: Draw axis lines
   radarScores.forEach((_, i) => {
     const end = polar(maxVal, i);
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.2);
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.25);
     doc.line(cx, cy, end.x, end.y);
   });
-  // Redraw reference polygon on top
-  doc.setDrawColor(148, 163, 184);
-  doc.setLineWidth(0.5);
+
+  // STEP 4: Draw reference polygon (dashed gray) on top of grid
+  doc.setDrawColor(150, 150, 170);
+  doc.setLineWidth(0.6);
   for (let i = 0; i < refPts.length; i++) {
     const next = refPts[(i + 1) % refPts.length];
-    doc.setLineDashPattern([1, 1], 0);
+    doc.setLineDashPattern([1.2, 1.2], 0);
     doc.line(refPts[i].x, refPts[i].y, next.x, next.y);
   }
   doc.setLineDashPattern([], 0);
-  // Draw score outline (dark blue border)
+  // Dots on reference
+  doc.setFillColor(150, 150, 170);
+  refPts.forEach((p) => { doc.circle(p.x, p.y, 0.6, "F"); });
+
+  // STEP 5: Draw score outline (solid dark blue) on top
   doc.setDrawColor(37, 99, 235);
-  doc.setLineWidth(0.8);
+  doc.setLineWidth(0.9);
   for (let i = 0; i < scorePts.length; i++) {
     const next = scorePts[(i + 1) % scorePts.length];
     doc.line(scorePts[i].x, scorePts[i].y, next.x, next.y);
   }
-  // Dots at vertices
+  // Dots at score vertices
   doc.setFillColor(37, 99, 235);
-  scorePts.forEach((p) => {
-    doc.circle(p.x, p.y, 0.8, "F");
-  });
+  scorePts.forEach((p) => { doc.circle(p.x, p.y, 0.9, "F"); });
 
   void scorePathX; void scorePathY;
 
@@ -1148,24 +1122,25 @@ export async function generateCopsoqPdf(opts: PdfReportOptions): Promise<void> {
       doc.text(card.sub, x + gCardW / 2, gCardY + 20, { align: "center" });
     });
 
-    // Radar chart (Perfil Psicossocial) do grupo
+    // Radar chart (Perfil Psicossocial) do grupo — página própria
+    addPage(doc);
+    drawRect(doc, 0, 0, W, 16, C.primary);
+    setFont(doc, "bold", 11);
+    setColor(doc, C.white);
+    doc.text(`${groupType}: ${groupLabel} — Perfil Psicossocial`, 14, 11);
+    setFont(doc, "normal", 8);
+    setColor(doc, [219, 234, 254] as RGB);
+    doc.text("Comparação das principais dimensões (escala 1–5)", W - 14, 11, { align: "right" });
     {
+      const H = doc.internal.pageSize.getHeight();
       const radarCx = W / 2;
-      const radarCy = gCardY + gCardH + 75;
-      const radarR = 55;
-
-      setFont(doc, "bold", 10);
-      setColor(doc, C.dark);
-      doc.text("Perfil Psicossocial", 14, gCardY + gCardH + 10);
-      setFont(doc, "normal", 7);
-      setColor(doc, C.mid);
-      doc.text("Comparação das principais dimensões (escala 1–5)", 14, gCardY + gCardH + 16);
-      drawLine(doc, 14, gCardY + gCardH + 18, W - 14, gCardY + gCardH + 18, C.border, 0.3);
+      const radarCy = H / 2 - 10;
+      const radarR = 75;
 
       drawRadarChart(doc, groupScores, radarCx, radarCy, radarR);
 
       // Legend
-      const legY = radarCy + radarR + 18;
+      const legY = radarCy + radarR + 22;
       drawRect(doc, W/2 - 30, legY - 3, 8, 3, [147, 197, 253] as RGB);
       setFont(doc, "normal", 7);
       setColor(doc, C.mid);
