@@ -16,6 +16,7 @@ import {
   BookOpen,
   ClipboardList,
   ShieldAlert,
+  Database,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "inventory", label: "Inventário de Riscos", icon: <ClipboardList size={18} /> },
   { id: "actions", label: "Plano de Ação", icon: <ShieldAlert size={18} /> },
   { id: "respondents", label: "Respondentes", icon: <Users size={18} /> },
+  { id: "manage", label: "Gerenciar Dados", icon: <Database size={18} /> },
   { id: "upload", label: "Importar Dados", icon: <Upload size={18} /> },
 ];
 

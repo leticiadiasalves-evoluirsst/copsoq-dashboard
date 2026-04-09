@@ -80,6 +80,9 @@ interface DashboardContextValue {
   greenCount: number;
   amberCount: number;
   redCount: number;
+  renameEmpresa: (oldValue: string, newValue: string) => void;
+  renameSetor: (oldValue: string, newValue: string) => void;
+  renameFuncao: (oldValue: string, newValue: string) => void;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -165,6 +168,34 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     [scores]
   );
 
+  // Rename functions
+  const renameEmpresa = useCallback((oldValue: string, newValue: string) => {
+    if (oldValue === newValue || !oldValue || !newValue) return;
+    setRespondents((prev) =>
+      prev.map((r) =>
+        r.empresa === oldValue ? { ...r, empresa: newValue } : r
+      )
+    );
+  }, []);
+
+  const renameSetor = useCallback((oldValue: string, newValue: string) => {
+    if (oldValue === newValue || !oldValue || !newValue) return;
+    setRespondents((prev) =>
+      prev.map((r) =>
+        r.setor === oldValue ? { ...r, setor: newValue } : r
+      )
+    );
+  }, []);
+
+  const renameFuncao = useCallback((oldValue: string, newValue: string) => {
+    if (oldValue === newValue || !oldValue || !newValue) return;
+    setRespondents((prev) =>
+      prev.map((r) =>
+        r.funcao === oldValue ? { ...r, funcao: newValue } : r
+      )
+    );
+  }, []);
+
   return (
     <DashboardContext.Provider
       value={{
@@ -182,6 +213,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         greenCount,
         amberCount,
         redCount,
+        renameEmpresa,
+        renameSetor,
+        renameFuncao,
       }}
     >
       {children}

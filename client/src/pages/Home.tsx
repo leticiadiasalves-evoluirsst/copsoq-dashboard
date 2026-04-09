@@ -15,8 +15,9 @@ import UploadView from "@/components/UploadView";
 import ExportPdfButton from "@/components/ExportPdfButton";
 import RiskInventoryView from "@/components/RiskInventoryView";
 import ActionPlanView from "@/components/ActionPlanView";
+import ManageDataView from "@/components/ManageDataView";
 
-type Section = "overview" | "dimensions" | "inventory" | "actions" | "respondents" | "upload";
+type Section = "overview" | "dimensions" | "inventory" | "actions" | "respondents" | "manage" | "upload";
 
 function DashboardContent() {
   const [activeSection, setActiveSection] = useState<Section>("overview");
@@ -33,6 +34,8 @@ function DashboardContent() {
         return <RiskInventoryView />;
       case "actions":
         return <ActionPlanView />;
+      case "manage":
+        return <ManageDataView />;
       case "upload":
         return <UploadView />;
       default:
@@ -73,7 +76,7 @@ function DashboardContent() {
         </header>
 
         {/* Filters */}
-        {activeSection !== "upload" && (
+        {activeSection !== "upload" && activeSection !== "manage" && (
           <div className="flex-shrink-0 px-6 pt-4">
             <FilterBar />
           </div>
