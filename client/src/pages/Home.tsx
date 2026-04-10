@@ -2,6 +2,10 @@
  * Home — Main dashboard page
  * Layout: Fixed sidebar (left) + scrollable content area (right)
  * Design: Structured Report / Institutional Analytics
+ * 
+ * FIX: All section components are now rendered once and toggled via CSS (display: none/block)
+ * instead of being conditionally mounted/unmounted. This prevents the CopsoqForm from
+ * being remounted on parent re-renders, which was causing the cursor to leave input fields.
  */
 
 import { useState, useCallback } from "react";
@@ -28,29 +32,6 @@ function DashboardContent() {
     // Increment key to trigger data refresh in context
     setRefreshKey((prev) => prev + 1);
   }, []);
-
-  const renderContent = () => {
-    switch (activeSection) {
-      case "overview":
-        return <Overview />;
-      case "dimensions":
-        return <DimensionsView />;
-      case "respondents":
-        return <RespondentsView />;
-      case "inventory":
-        return <RiskInventoryView />;
-      case "actions":
-        return <ActionPlanView />;
-      case "manage":
-        return <ManageDataView />;
-      case "upload":
-        return <UploadView />;
-      case "questionario":
-        return <CopsoqForm onSubmitted={handleFormSubmitted} />;
-      default:
-        return <Overview />;
-    }
-  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -84,16 +65,59 @@ function DashboardContent() {
           </div>
         </header>
 
-        {/* Filters */}
-        {activeSection !== "upload" && activeSection !== "manage" && activeSection !== "questionario" && (
-          <div className="flex-shrink-0 px-6 pt-4">
-            <FilterBar />
-          </div>
-        )}
+        {/* Filters — hidden for certain sections */}
+        <div
+          className="flex-shrink-0 px-6 pt-4"
+          style={{
+            display: activeSection === "upload" || activeSection === "manage" || activeSection === "questionario"
+              ? "none"
+              : "block",
+          }}
+        >
+          <FilterBar />
+        </div>
 
-        {/* Page content */}
+        {/* Page content — all sections rendered, visibility controlled by CSS */}
         <main className="flex-1 overflow-y-auto px-6 py-6">
-          {renderContent()}
+          {/* Overview section */}
+          <div style={{ display: activeSection === "overview" ? "block" : "none" }}>
+            <Overview />
+          </div>
+
+          {/* Dimensions section */}
+          <div style={{ display: activeSection === "dimensions" ? "block" : "none" }}>
+            <DimensionsView />
+          </div>
+
+          {/* Respondents section */}
+          <div style={{ display: activeSection === "respondents" ? "block" : "none" }}>
+            <RespondentsView />
+          </div>
+
+          {/* Risk Inventory section */}
+          <div style={{ display: activeSection === "inventory" ? "block" : "none" }}>
+            <RiskInventoryView />
+          </div>
+
+          {/* Action Plan section */}
+          <div style={{ display: activeSection === "actions" ? "block" : "none" }}>
+            <ActionPlanView />
+          </div>
+
+          {/* Manage Data section */}
+          <div style={{ display: activeSection === "manage" ? "block" : "none" }}>
+            <ManageDataView />
+          </div>
+
+          {/* Upload section */}
+          <div style={{ display: activeSection === "upload" ? "block" : "none" }}>
+            <UploadView />
+          </div>
+
+          {/* COPSOQ Questionnaire section — THIS WAS THE PROBLEMATIC COMPONENT */}
+          <div style={{ display: activeSection === "questionario" ? "block" : "none" }}>
+            <CopsoqForm onSubmitted={handleFormSubmitted} />
+          </div>
         </main>
       </div>
     </div>
