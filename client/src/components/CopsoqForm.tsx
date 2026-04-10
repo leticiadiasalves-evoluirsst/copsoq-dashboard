@@ -212,7 +212,7 @@ export default function CopsoqForm({ standalone = false, onSubmitted }: CopsoqFo
   };
 
   // ─── Wrapper ────────────────────────────────────────────────────────────
-  const Wrapper = ({ children }: { children: React.ReactNode }) => {
+  const wrapContent = (children: React.ReactNode) => {
     if (standalone) {
       return (
         <div className="min-h-screen bg-background">
@@ -262,8 +262,8 @@ export default function CopsoqForm({ standalone = false, onSubmitted }: CopsoqFo
 
   // ─── STEP: Intro ────────────────────────────────────────────────────────
   if (step === "intro") {
-    return (
-      <Wrapper>
+    return wrapContent(
+      <>
         <div ref={topRef} />
         {!standalone && (
           <div className="flex items-center justify-between">
@@ -395,14 +395,14 @@ export default function CopsoqForm({ standalone = false, onSubmitted }: CopsoqFo
             </div>
           </CardContent>
         </Card>
-      </Wrapper>
+      </>
     );
   }
 
   // ─── STEP: Questions ────────────────────────────────────────────────────
   if (step === "questions") {
-    return (
-      <Wrapper>
+    return wrapContent(
+      <>
         <div ref={topRef} />
 
         {/* Progress bar */}
@@ -482,14 +482,14 @@ export default function CopsoqForm({ standalone = false, onSubmitted }: CopsoqFo
             <ChevronRight size={16} />
           </Button>
         </div>
-      </Wrapper>
+      </>
     );
   }
 
   // ─── STEP: Review ───────────────────────────────────────────────────────
   if (step === "review") {
-    return (
-      <Wrapper>
+    return wrapContent(
+      <>
         <div ref={topRef} />
 
         <Card>
@@ -589,13 +589,13 @@ export default function CopsoqForm({ standalone = false, onSubmitted }: CopsoqFo
             )}
           </Button>
         </div>
-      </Wrapper>
+      </>
     );
   }
 
   // ─── STEP: Success ──────────────────────────────────────────────────────
-  return (
-    <Wrapper>
+  return wrapContent(
+    <>
       <div ref={topRef} />
       <Card>
         <CardContent className="py-12 text-center space-y-4">
@@ -620,6 +620,6 @@ export default function CopsoqForm({ standalone = false, onSubmitted }: CopsoqFo
           </div>
         </CardContent>
       </Card>
-    </Wrapper>
+    </>
   );
 }
