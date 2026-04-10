@@ -60,7 +60,7 @@ export const QUESTIONNAIRE_SECTIONS: QuestionSection[] = [
     title: "Organização do Trabalho e Conteúdo",
     description: "Questões sobre a organização e o conteúdo do seu trabalho",
     questions: [
-      { id: "Q7", text: "Tem um elevado grau de influência no seu trabalho?", scale: "frequency" },
+      { id: "Q7", text: "Você tem liberdade para decidir como realizar as suas tarefas?", scale: "frequency" },
       { id: "Q8", text: "O seu trabalho exige que tenha iniciativa?", scale: "frequency" },
       { id: "Q9", text: "O seu trabalho permite aprender coisas novas?", scale: "frequency" },
       { id: "Q10", text: "No seu local de trabalho, é informado com antecedência sobre as decisões importantes, mudanças ou planos para o futuro?", scale: "frequency" },

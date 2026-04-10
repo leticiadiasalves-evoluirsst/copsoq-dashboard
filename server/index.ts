@@ -3,11 +3,28 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import pg from "pg";
+
+const { Pool } = pg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ─── Data persistence (JSON file) ──────────────────────────────────────────
+// ─── Configuração do Banco de Dados (PostgreSQL ou Fallback JSON) ─────────
+const DATABASE_URL = process.env.DATABASE_URL;
+let pool: pg.Pool | null = null;
+
+if (DATABASE_URL) {
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: { rejectUnauthorized: false }, // Necessário para Neon e a maioria dos serviços em nuvem
+  });
+  console.log("Usando banco de dados PostgreSQL.");
+} else {
+  console.log("DATABASE_URL não definida. Usando fallback para arquivo JSON.");
+}
+
+// ─── Data persistence (JSON file fallback) ─────────────────────────────────
 const DATA_DIR = path.resolve(__dirname, "..", "data");
 const RESPONSES_FILE = path.join(DATA_DIR, "responses.json");
 
@@ -20,7 +37,7 @@ function ensureDataDir() {
   }
 }
 
-function readResponses(): unknown[] {
+function readResponsesJson(): any[] {
   ensureDataDir();
   try {
     const raw = fs.readFileSync(RESPONSES_FILE, "utf-8");
@@ -30,14 +47,39 @@ function readResponses(): unknown[] {
   }
 }
 
-function writeResponses(data: unknown[]) {
+function writeResponsesJson(data: any[]) {
   ensureDataDir();
   fs.writeFileSync(RESPONSES_FILE, JSON.stringify(data, null, 2), "utf-8");
+}
+
+// ─── Inicialização do Banco de Dados ───────────────────────────────────────
+async function initDb() {
+  if (!pool) return;
+  
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS responses (
+        id SERIAL PRIMARY KEY,
+        empresa TEXT,
+        setor TEXT,
+        funcao TEXT,
+        nome TEXT,
+        respostas JSONB,
+        submitted_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log("Tabela 'responses' verificada/criada com sucesso no PostgreSQL.");
+  } catch (err) {
+    console.error("Erro ao inicializar tabela no PostgreSQL:", err);
+  }
 }
 
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // Inicializar DB se aplicável
+  await initDb();
 
   // JSON body parser
   app.use(express.json({ limit: "5mb" }));
@@ -45,60 +87,112 @@ async function startServer() {
   // ─── API Routes ─────────────────────────────────────────────────────────
 
   // GET /api/responses — Retrieve all saved responses
-  app.get("/api/responses", (_req, res) => {
+  app.get("/api/responses", async (_req, res) => {
     try {
-      const responses = readResponses();
-      res.json(responses);
+      if (pool) {
+        const result = await pool.query("SELECT * FROM responses ORDER BY id ASC");
+        // Mapear snake_case (submitted_at) para camelCase (submittedAt) como o frontend espera
+        const responses = result.rows.map(row => ({
+          id: row.id,
+          empresa: row.empresa,
+          setor: row.setor,
+          funcao: row.funcao,
+          nome: row.nome,
+          respostas: row.respostas,
+          submittedAt: row.submitted_at
+        }));
+        res.json(responses);
+      } else {
+        const responses = readResponsesJson();
+        res.json(responses);
+      }
     } catch (err) {
+      console.error("Erro GET /api/responses:", err);
       res.status(500).json({ error: "Erro ao ler respostas." });
     }
   });
 
   // POST /api/responses — Save a new questionnaire response
-  app.post("/api/responses", (req, res) => {
+  app.post("/api/responses", async (req, res) => {
     try {
       const body = req.body;
       if (!body || !body.respostas) {
         return res.status(400).json({ error: "Dados inválidos." });
       }
 
-      const responses = readResponses();
-      const newId = responses.length > 0
-        ? Math.max(...(responses as any[]).map((r: any) => r.id || 0)) + 1
-        : 1;
+      if (pool) {
+        const result = await pool.query(
+          `INSERT INTO responses (empresa, setor, funcao, nome, respostas) 
+           VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+          [
+            (body.empresa || "").trim(),
+            (body.setor || "").trim(),
+            (body.funcao || "").trim(),
+            (body.nome || "").trim(),
+            body.respostas
+          ]
+        );
+        const row = result.rows[0];
+        const newResponse = {
+          id: row.id,
+          empresa: row.empresa,
+          setor: row.setor,
+          funcao: row.funcao,
+          nome: row.nome,
+          respostas: row.respostas,
+          submittedAt: row.submitted_at
+        };
+        res.status(201).json(newResponse);
+      } else {
+        const responses = readResponsesJson();
+        const newId = responses.length > 0
+          ? Math.max(...responses.map((r: any) => r.id || 0)) + 1
+          : 1;
 
-      const newResponse = {
-        id: newId,
-        empresa: (body.empresa || "").trim(),
-        setor: (body.setor || "").trim(),
-        funcao: (body.funcao || "").trim(),
-        nome: (body.nome || "").trim(),
-        respostas: body.respostas,
-        submittedAt: new Date().toISOString(),
-      };
+        const newResponse = {
+          id: newId,
+          empresa: (body.empresa || "").trim(),
+          setor: (body.setor || "").trim(),
+          funcao: (body.funcao || "").trim(),
+          nome: (body.nome || "").trim(),
+          respostas: body.respostas,
+          submittedAt: new Date().toISOString(),
+        };
 
-      responses.push(newResponse);
-      writeResponses(responses);
+        responses.push(newResponse);
+        writeResponsesJson(responses);
 
-      res.status(201).json(newResponse);
+        res.status(201).json(newResponse);
+      }
     } catch (err) {
+      console.error("Erro POST /api/responses:", err);
       res.status(500).json({ error: "Erro ao salvar resposta." });
     }
   });
 
   // DELETE /api/responses/:id — Delete a specific response
-  app.delete("/api/responses/:id", (req, res) => {
+  app.delete("/api/responses/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      let responses = readResponses() as any[];
-      const before = responses.length;
-      responses = responses.filter((r: any) => r.id !== id);
-      if (responses.length === before) {
-        return res.status(404).json({ error: "Resposta não encontrada." });
+      
+      if (pool) {
+        const result = await pool.query("DELETE FROM responses WHERE id = $1 RETURNING id", [id]);
+        if (result.rowCount === 0) {
+          return res.status(404).json({ error: "Resposta não encontrada." });
+        }
+        res.json({ success: true });
+      } else {
+        let responses = readResponsesJson();
+        const before = responses.length;
+        responses = responses.filter((r: any) => r.id !== id);
+        if (responses.length === before) {
+          return res.status(404).json({ error: "Resposta não encontrada." });
+        }
+        writeResponsesJson(responses);
+        res.json({ success: true });
       }
-      writeResponses(responses);
-      res.json({ success: true });
     } catch (err) {
+      console.error("Erro DELETE /api/responses/:id:", err);
       res.status(500).json({ error: "Erro ao excluir resposta." });
     }
   });

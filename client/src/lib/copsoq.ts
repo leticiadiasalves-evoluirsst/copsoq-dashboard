@@ -44,7 +44,7 @@ export const QUESTION_LABELS: Record<string, string> = {
   Q4: "O seu trabalho exige a sua atenção constante?",
   Q5: "O seu trabalho exige que tome decisões difíceis?",
   Q6: "O seu trabalho exige emocionalmente de você?",
-  Q7: "Tem um elevado grau de influência em seu trabalho?",
+  Q7: "Você tem liberdade para decidir como realizar as suas tarefas?",
   Q8: "O seu trabalho exige que tenha iniciativa?",
   Q9: "O seu trabalho permite aprender coisas novas?",
   Q10: "No seu local de trabalho, é informado com antecedência sobre as decisões importantes, mudanças ou planos para o futuro?",
