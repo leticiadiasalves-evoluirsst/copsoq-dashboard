@@ -17,6 +17,7 @@ import {
   ClipboardList,
   ShieldAlert,
   Database,
+  FileEdit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ interface NavItem {
   id: string;
   label: string;
   icon: React.ReactNode;
+  separator?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -34,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "respondents", label: "Respondentes", icon: <Users size={18} /> },
   { id: "manage", label: "Gerenciar Dados", icon: <Database size={18} /> },
   { id: "upload", label: "Importar Dados", icon: <Upload size={18} /> },
+  { id: "questionario", label: "Questionário", icon: <FileEdit size={18} />, separator: true },
 ];
 
 interface SidebarProps {
@@ -108,21 +111,36 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
           </p>
         )}
         {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onSectionChange(item.id)}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150",
-              collapsed ? "justify-center" : "",
-              activeSection === item.id
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+          <div key={item.id}>
+            {item.separator && (
+              <div className="my-3">
+                {!collapsed && (
+                  <div className="flex items-center gap-2 px-3 mb-2">
+                    <div className="flex-1 h-px bg-sidebar-border" />
+                    <p className="text-[10px] font-semibold tracking-widest uppercase text-sidebar-foreground/40">
+                      Coleta
+                    </p>
+                    <div className="flex-1 h-px bg-sidebar-border" />
+                  </div>
+                )}
+                {collapsed && <div className="h-px bg-sidebar-border mx-2" />}
+              </div>
             )}
-            title={collapsed ? item.label : undefined}
-          >
-            <span className="flex-shrink-0">{item.icon}</span>
-            {!collapsed && <span>{item.label}</span>}
-          </button>
+            <button
+              onClick={() => onSectionChange(item.id)}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150",
+                collapsed ? "justify-center" : "",
+                activeSection === item.id
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+              )}
+              title={collapsed ? item.label : undefined}
+            >
+              <span className="flex-shrink-0">{item.icon}</span>
+              {!collapsed && <span>{item.label}</span>}
+            </button>
+          </div>
         ))}
       </nav>
 

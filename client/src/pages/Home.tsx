@@ -4,7 +4,7 @@
  * Design: Structured Report / Institutional Analytics
  */
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { DashboardProvider } from "@/contexts/DashboardContext";
 import Sidebar from "@/components/Sidebar";
 import FilterBar from "@/components/FilterBar";
@@ -16,11 +16,18 @@ import ExportPdfButton from "@/components/ExportPdfButton";
 import RiskInventoryView from "@/components/RiskInventoryView";
 import ActionPlanView from "@/components/ActionPlanView";
 import ManageDataView from "@/components/ManageDataView";
+import CopsoqForm from "@/components/CopsoqForm";
 
-type Section = "overview" | "dimensions" | "inventory" | "actions" | "respondents" | "manage" | "upload";
+type Section = "overview" | "dimensions" | "inventory" | "actions" | "respondents" | "manage" | "upload" | "questionario";
 
 function DashboardContent() {
   const [activeSection, setActiveSection] = useState<Section>("overview");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleFormSubmitted = useCallback(() => {
+    // Increment key to trigger data refresh in context
+    setRefreshKey((prev) => prev + 1);
+  }, []);
 
   const renderContent = () => {
     switch (activeSection) {
@@ -38,6 +45,8 @@ function DashboardContent() {
         return <ManageDataView />;
       case "upload":
         return <UploadView />;
+      case "questionario":
+        return <CopsoqForm onSubmitted={handleFormSubmitted} />;
       default:
         return <Overview />;
     }
@@ -76,7 +85,7 @@ function DashboardContent() {
         </header>
 
         {/* Filters */}
-        {activeSection !== "upload" && activeSection !== "manage" && (
+        {activeSection !== "upload" && activeSection !== "manage" && activeSection !== "questionario" && (
           <div className="flex-shrink-0 px-6 pt-4">
             <FilterBar />
           </div>

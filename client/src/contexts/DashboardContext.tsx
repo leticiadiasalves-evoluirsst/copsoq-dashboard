@@ -1,9 +1,10 @@
 /*
  * DashboardContext — Global state for COPSOQ II dashboard
  * Manages: respondent data, filters, computed scores
+ * Now supports loading from backend API (saved questionnaire responses)
  */
 
-import React, { createContext, useContext, useState, useMemo, useCallback } from "react";
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from "react";
 import {
   Respondent,
   DimensionScore,
@@ -11,52 +12,6 @@ import {
   textToValue,
   QUESTION_LABELS,
 } from "@/lib/copsoq";
-
-// ─── Sample data (from the Forms Excel file) ────────────────────────────────
-const SAMPLE_RESPONDENTS: Respondent[] = [
-  {
-    id: 448,
-    empresa: "Giselle Rodrigues de Pina Eireli",
-    setor: "Instrutor",
-    funcao: "Personal",
-    nome: "Pedro Henrique",
-    respostas: {
-      Q1: 2, Q2: 1, Q3: 1, Q4: 4, Q5: 5, Q6: 4, Q7: 4, Q8: 5, Q9: 4,
-      Q10: 1, Q11: 2, Q12: 5, Q13: 1, Q14: 5, Q15: 2, Q16: 5, Q17: 3,
-      Q18: 4, Q19: 5, Q20: 5, Q21: 4, Q22: 3, Q23: 5, Q24: 4, Q25: 5,
-      Q26: 2, Q27: 5, Q28: 2, Q29: 3, Q30: 1, Q31: 1, Q32: 3, Q33: 4,
-      Q34: 3, Q35: 1, Q36: 2, Q37: 2, Q38: 1, Q39: 1, Q40: 1, Q41: 1,
-    },
-  },
-  {
-    id: 449,
-    empresa: "Giselle Rodrigues de Pina Eireli",
-    setor: "Instrutora",
-    funcao: "Personal",
-    nome: "Jaqueline",
-    respostas: {
-      Q1: 3, Q2: 1, Q3: 1, Q4: 5, Q5: 3, Q6: 4, Q7: 5, Q8: 4, Q9: 5,
-      Q10: 2, Q11: 5, Q12: 5, Q13: 5, Q14: 5, Q15: 4, Q16: 5, Q17: 3,
-      Q18: 3, Q19: 5, Q20: 5, Q21: 5, Q22: 5, Q23: 4, Q24: 4, Q25: 4,
-      Q26: 3, Q27: 4, Q28: 5, Q29: 5, Q30: 3, Q31: 3, Q32: 1, Q33: 1,
-      Q34: 2, Q35: 2, Q36: 1, Q37: 1, Q38: 1, Q39: 1, Q40: 1, Q41: 1,
-    },
-  },
-  {
-    id: 450,
-    empresa: "Life Training Personal Studio",
-    setor: "Salão de musculação",
-    funcao: "Personal trainer",
-    nome: "Nathalia",
-    respostas: {
-      Q1: 1, Q2: 1, Q3: 3, Q4: 5, Q5: 3, Q6: 3, Q7: 4, Q8: 5, Q9: 4,
-      Q10: 3, Q11: 4, Q12: 5, Q13: 3, Q14: 3, Q15: 5, Q16: 4, Q17: 4,
-      Q18: 4, Q19: 4, Q20: 4, Q21: 3, Q22: 3, Q23: 4, Q24: 4, Q25: 5,
-      Q26: 2, Q27: 4, Q28: 5, Q29: 3, Q30: 1, Q31: 2, Q32: 1, Q33: 3,
-      Q34: 1, Q35: 3, Q36: 1, Q37: 1, Q38: 1, Q39: 1, Q40: 1, Q41: 1,
-    },
-  },
-];
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Filters {
@@ -73,6 +28,8 @@ interface DashboardContextValue {
   setFilter: (key: keyof Filters, value: string) => void;
   clearFilters: () => void;
   loadRespondents: (data: Respondent[]) => void;
+  addRespondent: (data: Respondent) => void;
+  refreshFromServer: () => Promise<void>;
   empresas: string[];
   setores: string[];
   funcoes: string[];
@@ -107,6 +64,42 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     setRespondents(data);
     setFilters({ empresa: "", setor: "", funcao: "" });
   }, []);
+
+  const addRespondent = useCallback((data: Respondent) => {
+    setRespondents((prev) => [...prev, data]);
+  }, []);
+
+  // Load saved responses from server on mount
+  const refreshFromServer = useCallback(async () => {
+    try {
+      const res = await fetch("/api/responses");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: Respondent[] = data.map((r: any) => ({
+            id: r.id,
+            empresa: r.empresa || "",
+            setor: r.setor || "",
+            funcao: r.funcao || "",
+            nome: r.nome || "",
+            respostas: r.respostas || {},
+          }));
+          setRespondents((prev) => {
+            // Merge: keep existing respondents that are not from server, add server ones
+            const serverIds = new Set(mapped.map((m) => m.id));
+            const nonServer = prev.filter((p) => !serverIds.has(p.id));
+            return [...nonServer, ...mapped];
+          });
+        }
+      }
+    } catch {
+      // Silently fail — server may not be running in dev/static mode
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshFromServer();
+  }, [refreshFromServer]);
 
   // Unique filter options
   const empresas = useMemo(
@@ -206,6 +199,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         setFilter,
         clearFilters,
         loadRespondents,
+        addRespondent,
+        refreshFromServer,
         empresas,
         setores,
         funcoes,
