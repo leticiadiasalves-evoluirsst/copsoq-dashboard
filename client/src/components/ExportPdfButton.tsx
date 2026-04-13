@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 
 export default function ExportPdfButton() {
-  const { scores, totalRespondents, greenCount, amberCount, redCount, filters, empresas, respondents } =
+  const { scores, totalRespondents, greenCount, amberCount, redCount, filters, empresas, filteredRespondents } =
     useDashboard();
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -49,7 +49,7 @@ export default function ExportPdfButton() {
         redCount,
         filters,
         empresas,
-        respondents,
+        respondents: filteredRespondents,
         coverInfo,
       });
       toast.success("Relatório PDF exportado com sucesso!");
@@ -59,7 +59,7 @@ export default function ExportPdfButton() {
     } finally {
       setLoading(false);
     }
-  }, [scores, totalRespondents, greenCount, amberCount, redCount, filters, empresas, respondents, coverInfo]);
+  }, [scores, totalRespondents, greenCount, amberCount, redCount, filters, empresas, filteredRespondents, coverInfo]);
 
   return (
     <>
