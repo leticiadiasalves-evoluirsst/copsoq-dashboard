@@ -11,21 +11,22 @@ import {
   Upload,
   ChevronLeft,
   ChevronRight,
-  Activity,
-  Shield,
   BookOpen,
   ClipboardList,
   ShieldAlert,
   Database,
   FileEdit,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
   id: string;
   label: string;
   icon: React.ReactNode;
   separator?: boolean;
+  adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -37,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "manage", label: "Gerenciar Dados", icon: <Database size={18} /> },
   { id: "upload", label: "Importar Dados", icon: <Upload size={18} /> },
   { id: "questionario", label: "Questionário", icon: <FileEdit size={18} />, separator: true },
+  { id: "users", label: "Usuários", icon: <UserCog size={18} />, adminOnly: true },
 ];
 
 interface SidebarProps {
@@ -46,6 +48,9 @@ interface SidebarProps {
 
 export default function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const { isAdmin } = useAuth();
+
+  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
 
   return (
     <aside
@@ -110,7 +115,7 @@ export default function Sidebar({ activeSection, onSectionChange }: SidebarProps
             Painel
           </p>
         )}
-        {NAV_ITEMS.map((item) => (
+        {visibleItems.map((item) => (
           <div key={item.id}>
             {item.separator && (
               <div className="my-3">

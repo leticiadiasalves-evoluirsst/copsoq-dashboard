@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo } from
 
 interface AuthContextValue {
   isAuthenticated: boolean;
+  isAdmin: boolean;
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
@@ -11,12 +12,28 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const SESSION_KEY = "copsoq_auth_token";
 
+function decodeIsAdmin(token: string | null): boolean {
+  if (!token) return false;
+  try {
+    const encodedPayload = token.split(":")[0];
+    // base64url → base64
+    const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
+    const payload = atob(base64);
+    // payload: username:isAdmin:expiresAt
+    const parts = payload.split(":");
+    return parts[parts.length - 2] === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() =>
     sessionStorage.getItem(SESSION_KEY)
   );
 
   const isAuthenticated = token !== null;
+  const isAdmin = useMemo(() => decodeIsAdmin(token), [token]);
 
   const login = useCallback(async (username: string, password: string) => {
     const res = await fetch("/api/auth/login", {
@@ -39,8 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ isAuthenticated, token, login, logout }),
-    [isAuthenticated, token, login, logout]
+    () => ({ isAuthenticated, isAdmin, token, login, logout }),
+    [isAuthenticated, isAdmin, token, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

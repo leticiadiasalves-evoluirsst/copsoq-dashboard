@@ -30,7 +30,7 @@ function RiskDot({ level }: { level: "green" | "amber" | "red" }) {
 
 export default function RespondentsView() {
   const { filteredRespondents, refreshFromServer } = useDashboard();
-  const { isAuthenticated, token } = useAuth();
+  const { isAdmin, token } = useAuth();
   const [expandedId, setExpandedId] = useState<string | number | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | number | null>(null);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
@@ -160,7 +160,7 @@ export default function RespondentsView() {
                     <p className="text-[10px] text-muted-foreground mt-3">
                       Formato: Pontuação individual / Referência nacional
                     </p>
-                    {isAuthenticated && (
+                    {isAdmin && (
                       <div className="flex justify-end mt-3 pt-3 border-t border-border/30">
                         <Button
                           variant="ghost"

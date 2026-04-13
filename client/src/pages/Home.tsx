@@ -24,8 +24,9 @@ import RiskInventoryView from "@/components/RiskInventoryView";
 import ActionPlanView from "@/components/ActionPlanView";
 import ManageDataView from "@/components/ManageDataView";
 import CopsoqForm from "@/components/CopsoqForm";
+import UsersView from "@/components/UsersView";
 
-type Section = "overview" | "dimensions" | "inventory" | "actions" | "respondents" | "manage" | "upload" | "questionario";
+type Section = "overview" | "dimensions" | "inventory" | "actions" | "respondents" | "manage" | "upload" | "questionario" | "users";
 
 function DashboardContent() {
   const [activeSection, setActiveSection] = useState<Section>("overview");
@@ -82,7 +83,7 @@ function DashboardContent() {
         <div
           className="flex-shrink-0 px-6 pt-4"
           style={{
-            display: activeSection === "upload" || activeSection === "manage" || activeSection === "questionario"
+            display: activeSection === "upload" || activeSection === "manage" || activeSection === "questionario" || activeSection === "users"
               ? "none"
               : "block",
           }}
@@ -130,6 +131,11 @@ function DashboardContent() {
           {/* COPSOQ Questionnaire section — THIS WAS THE PROBLEMATIC COMPONENT */}
           <div style={{ display: activeSection === "questionario" ? "block" : "none" }}>
             <CopsoqForm onSubmitted={handleFormSubmitted} />
+          </div>
+
+          {/* Users management section — admin only */}
+          <div style={{ display: activeSection === "users" ? "block" : "none" }}>
+            <UsersView />
           </div>
         </main>
       </div>
