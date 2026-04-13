@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { DashboardProvider } from "@/contexts/DashboardContext";
+import { DashboardProvider, useDashboard } from "@/contexts/DashboardContext";
 import Sidebar from "@/components/Sidebar";
 import FilterBar from "@/components/FilterBar";
 import Overview from "@/components/Overview";
@@ -26,12 +26,11 @@ type Section = "overview" | "dimensions" | "inventory" | "actions" | "respondent
 
 function DashboardContent() {
   const [activeSection, setActiveSection] = useState<Section>("overview");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const { refreshFromServer } = useDashboard();
 
   const handleFormSubmitted = useCallback(() => {
-    // Increment key to trigger data refresh in context
-    setRefreshKey((prev) => prev + 1);
-  }, []);
+    refreshFromServer();
+  }, [refreshFromServer]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
