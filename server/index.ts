@@ -221,6 +221,33 @@ async function startServer() {
     }
   });
 
+  // PATCH /api/responses/rename — Rename empresa/setor/funcao in all responses (admin only)
+  app.patch("/api/responses/rename", requireAuth, async (req, res) => {
+    try {
+      const { field, oldValue, newValue } = req.body || {};
+      if (!["empresa", "setor", "funcao"].includes(field) || !oldValue || !newValue) {
+        return res.status(400).json({ error: "Dados inválidos." });
+      }
+      if (sql) {
+        if (field === "empresa") {
+          await sql`UPDATE responses SET empresa = ${newValue} WHERE empresa = ${oldValue}`;
+        } else if (field === "setor") {
+          await sql`UPDATE responses SET setor = ${newValue} WHERE setor = ${oldValue}`;
+        } else {
+          await sql`UPDATE responses SET funcao = ${newValue} WHERE funcao = ${oldValue}`;
+        }
+      } else {
+        const responses = readResponsesJson();
+        responses.forEach((r: any) => { if (r[field] === oldValue) r[field] = newValue; });
+        writeResponsesJson(responses);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Erro PATCH /api/responses/rename:", err);
+      res.status(500).json({ error: "Erro ao renomear." });
+    }
+  });
+
   // DELETE /api/responses/:id — Delete a specific response (admin only)
   app.delete("/api/responses/:id", requireAuth, async (req, res) => {
     try {

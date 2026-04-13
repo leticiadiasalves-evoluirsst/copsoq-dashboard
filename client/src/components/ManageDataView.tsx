@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { useDashboard } from "@/contexts/DashboardContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ interface ConfirmState {
 
 export default function ManageDataView() {
   const { empresas, setores, funcoes, respondents, renameEmpresa, renameSetor, renameFuncao } = useDashboard();
+  const { token } = useAuth();
   const [editing, setEditing] = useState<EditingState>({ field: null, oldValue: null, newValue: "" });
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>({ field: null, oldValue: null, newValue: "" });
 
@@ -61,11 +63,12 @@ export default function ManageDataView() {
     });
   };
 
-  const handleApplyRename = () => {
+  const handleApplyRename = async () => {
     if (!confirmDialog.field || !confirmDialog.oldValue) return;
 
     const count = getCountForValue(confirmDialog.field, confirmDialog.oldValue);
 
+    // Atualizar estado local imediatamente
     if (confirmDialog.field === "empresa") {
       renameEmpresa(confirmDialog.oldValue, confirmDialog.newValue);
     } else if (confirmDialog.field === "setor") {
@@ -74,9 +77,28 @@ export default function ManageDataView() {
       renameFuncao(confirmDialog.oldValue, confirmDialog.newValue);
     }
 
-    toast.success(`"${confirmDialog.oldValue}" renomeado para "${confirmDialog.newValue}" em ${count} respondente(s)`);
     setEditing({ field: null, oldValue: null, newValue: "" });
     setConfirmDialog({ field: null, oldValue: null, newValue: "" });
+
+    // Persistir no servidor
+    try {
+      const res = await fetch("/api/responses/rename", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          field: confirmDialog.field,
+          oldValue: confirmDialog.oldValue,
+          newValue: confirmDialog.newValue,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(`"${confirmDialog.oldValue}" renomeado para "${confirmDialog.newValue}" em ${count} respondente(s)`);
+    } catch {
+      toast.error("Alteração aplicada localmente, mas falhou ao salvar no servidor.");
+    }
   };
 
   const renderValuesList = (field: "empresa" | "setor" | "funcao", values: string[]) => {
