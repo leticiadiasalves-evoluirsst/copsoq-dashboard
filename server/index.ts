@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { neon } from "@neondatabase/serverless";
 
@@ -47,6 +48,46 @@ function writeResponsesJson(data: any[]) {
   fs.writeFileSync(RESPONSES_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
+// ─── Auth ─────────────────────────────────────────────────────────────────
+const ADMIN_USER = process.env.ADMIN_USER || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "changeme-secret";
+const TOKEN_TTL_MS = 8 * 60 * 60 * 1000; // 8 horas
+
+function signToken(payload: string): string {
+  return crypto.createHmac("sha256", ADMIN_SECRET).update(payload).digest("hex");
+}
+
+function createToken(username: string): string {
+  const expiresAt = Date.now() + TOKEN_TTL_MS;
+  const payload = `${username}:${expiresAt}`;
+  return `${Buffer.from(payload).toString("base64url")}:${signToken(payload)}`;
+}
+
+function verifyToken(token: string): boolean {
+  try {
+    const colonIdx = token.indexOf(":");
+    if (colonIdx === -1) return false;
+    const encodedPayload = token.slice(0, colonIdx);
+    const sig = token.slice(colonIdx + 1);
+    const payload = Buffer.from(encodedPayload, "base64url").toString();
+    const expected = signToken(payload);
+    if (sig.length !== expected.length) return false;
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return false;
+    const parts = payload.split(":");
+    return Date.now() < parseInt(parts[parts.length - 1], 10);
+  } catch {
+    return false;
+  }
+}
+
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const h = req.headers.authorization;
+  if (!h?.startsWith("Bearer ")) return res.status(401).json({ error: "Não autorizado." });
+  if (!verifyToken(h.slice(7))) return res.status(401).json({ error: "Token inválido ou expirado." });
+  next();
+}
+
 // ─── Inicialização do Banco de Dados ───────────────────────────────────────
 async function initDb() {
   if (!sql) return;
@@ -80,6 +121,22 @@ async function startServer() {
   app.use(express.json({ limit: "5mb" }));
 
   // ─── API Routes ─────────────────────────────────────────────────────────
+
+  // POST /api/auth/login — Autenticar admin
+  app.post("/api/auth/login", (req, res) => {
+    const { username, password } = req.body || {};
+    if (!ADMIN_PASSWORD || typeof username !== "string" || typeof password !== "string") {
+      return res.status(400).json({ error: "Credenciais inválidas." });
+    }
+    const userMatch = username === ADMIN_USER;
+    const pwMatch =
+      password.length === ADMIN_PASSWORD.length &&
+      crypto.timingSafeEqual(Buffer.from(password), Buffer.from(ADMIN_PASSWORD));
+    if (!userMatch || !pwMatch) {
+      return res.status(401).json({ error: "Usuário ou senha incorretos." });
+    }
+    res.json({ token: createToken(username) });
+  });
 
   // GET /api/responses — Retrieve all saved responses
   app.get("/api/responses", async (_req, res) => {
@@ -164,8 +221,8 @@ async function startServer() {
     }
   });
 
-  // DELETE /api/responses/:id — Delete a specific response
-  app.delete("/api/responses/:id", async (req, res) => {
+  // DELETE /api/responses/:id — Delete a specific response (admin only)
+  app.delete("/api/responses/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       

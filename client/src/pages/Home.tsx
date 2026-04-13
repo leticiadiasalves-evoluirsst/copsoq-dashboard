@@ -10,6 +10,9 @@
 
 import { useState, useCallback } from "react";
 import { DashboardProvider, useDashboard } from "@/contexts/DashboardContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import FilterBar from "@/components/FilterBar";
 import Overview from "@/components/Overview";
@@ -27,6 +30,7 @@ type Section = "overview" | "dimensions" | "inventory" | "actions" | "respondent
 function DashboardContent() {
   const [activeSection, setActiveSection] = useState<Section>("overview");
   const { refreshFromServer } = useDashboard();
+  const { logout } = useAuth();
 
   const handleFormSubmitted = useCallback(() => {
     refreshFromServer();
@@ -60,6 +64,16 @@ function DashboardContent() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              title="Sair"
+            >
+              <LogOut size={14} />
+              <span className="hidden sm:inline">Sair</span>
+            </Button>
             <ExportPdfButton />
           </div>
         </header>

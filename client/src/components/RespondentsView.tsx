@@ -2,10 +2,22 @@
  * RespondentsView — Table of individual respondents with their scores
  */
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useDashboard } from "@/contexts/DashboardContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { DIMENSIONS, calcDimensionScore, RISK_COLORS, RISK_BG_COLORS } from "@/lib/copsoq";
-import { ChevronDown, ChevronRight, User } from "lucide-react";
+import { ChevronDown, ChevronRight, User, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 function RiskDot({ level }: { level: "green" | "amber" | "red" }) {
   return (
@@ -17,8 +29,34 @@ function RiskDot({ level }: { level: "green" | "amber" | "red" }) {
 }
 
 export default function RespondentsView() {
-  const { filteredRespondents } = useDashboard();
+  const { filteredRespondents, refreshFromServer } = useDashboard();
+  const { isAuthenticated, token } = useAuth();
   const [expandedId, setExpandedId] = useState<string | number | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | number | null>(null);
+  const [deletingId, setDeletingId] = useState<string | number | null>(null);
+
+  const handleDelete = useCallback(async () => {
+    if (pendingDeleteId == null || !token) return;
+    setDeletingId(pendingDeleteId);
+    setPendingDeleteId(null);
+    try {
+      const res = await fetch(`/api/responses/${pendingDeleteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as any).error || "Erro ao excluir.");
+      }
+      toast.success("Respondente excluído com sucesso.");
+      setExpandedId(null);
+      await refreshFromServer();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao excluir respondente.");
+    } finally {
+      setDeletingId(null);
+    }
+  }, [pendingDeleteId, token, refreshFromServer]);
 
   return (
     <div className="space-y-6">
@@ -122,6 +160,23 @@ export default function RespondentsView() {
                     <p className="text-[10px] text-muted-foreground mt-3">
                       Formato: Pontuação individual / Referência nacional
                     </p>
+                    {isAuthenticated && (
+                      <div className="flex justify-end mt-3 pt-3 border-t border-border/30">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={deletingId === r.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingDeleteId(r.id);
+                          }}
+                          className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 size={14} />
+                          Excluir respondente
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -129,6 +184,29 @@ export default function RespondentsView() {
           })}
         </div>
       )}
+
+      <AlertDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir respondente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação excluirá permanentemente os dados deste respondente do banco de dados. Esta operação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-3 justify-end">
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
