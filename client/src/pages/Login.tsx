@@ -36,18 +36,28 @@ export default function Login() {
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
       <Card className="w-full max-w-sm mx-4 shadow-lg border border-border bg-white">
         <CardHeader className="text-center pb-2">
-          <div className="flex justify-center mb-4">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Lock size={22} className="text-primary" />
-            </div>
+          <div className="flex justify-center mb-3">
+            <img
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310419663031272139/nMBkaAmAqguAoZSh.webp"
+              alt="Evoluir SST"
+              className="h-12 w-auto object-contain"
+            />
           </div>
           <CardTitle
-            className="text-xl"
+            className="text-xl font-bold"
             style={{ fontFamily: "'Source Serif 4', Georgia, serif" }}
           >
-            Área Administrativa
+            Painel de Avaliação Psicossocial
           </CardTitle>
-          <CardDescription>Acesso restrito ao administrador</CardDescription>
+          <CardDescription className="text-xs mt-1">
+            NR-17 · Metodologia COPSOQ II — Versão Portuguesa
+          </CardDescription>
+          <div className="flex justify-center mt-3">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Lock size={18} className="text-primary" />
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">Acesso restrito ao administrador</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
