@@ -3,23 +3,18 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import pg from "pg";
-
-const { Pool } = pg;
+import { neon } from "@neondatabase/serverless";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ─── Configuração do Banco de Dados (PostgreSQL ou Fallback JSON) ─────────
 const DATABASE_URL = process.env.DATABASE_URL;
-let pool: pg.Pool | null = null;
+let sql: any = null;
 
 if (DATABASE_URL) {
-  pool = new Pool({
-    connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, // Necessário para Neon e a maioria dos serviços em nuvem
-  });
-  console.log("Usando banco de dados PostgreSQL.");
+  sql = neon(DATABASE_URL);
+  console.log("Usando banco de dados PostgreSQL (Neon Serverless).");
 } else {
   console.log("DATABASE_URL não definida. Usando fallback para arquivo JSON.");
 }
@@ -54,10 +49,10 @@ function writeResponsesJson(data: any[]) {
 
 // ─── Inicialização do Banco de Dados ───────────────────────────────────────
 async function initDb() {
-  if (!pool) return;
+  if (!sql) return;
   
   try {
-    await pool.query(`
+    await sql`
       CREATE TABLE IF NOT EXISTS responses (
         id SERIAL PRIMARY KEY,
         empresa TEXT,
@@ -67,7 +62,7 @@ async function initDb() {
         respostas JSONB,
         submitted_at TIMESTAMPTZ DEFAULT NOW()
       );
-    `);
+    `;
     console.log("Tabela 'responses' verificada/criada com sucesso no PostgreSQL.");
   } catch (err) {
     console.error("Erro ao inicializar tabela no PostgreSQL:", err);
@@ -89,10 +84,10 @@ async function startServer() {
   // GET /api/responses — Retrieve all saved responses
   app.get("/api/responses", async (_req, res) => {
     try {
-      if (pool) {
-        const result = await pool.query("SELECT * FROM responses ORDER BY id ASC");
+      if (sql) {
+        const rows = await sql`SELECT * FROM responses ORDER BY id ASC`;
         // Mapear snake_case (submitted_at) para camelCase (submittedAt) como o frontend espera
-        const responses = result.rows.map(row => ({
+        const responses = rows.map((row: any) => ({
           id: row.id,
           empresa: row.empresa,
           setor: row.setor,
@@ -120,19 +115,18 @@ async function startServer() {
         return res.status(400).json({ error: "Dados inválidos." });
       }
 
-      if (pool) {
-        const result = await pool.query(
-          `INSERT INTO responses (empresa, setor, funcao, nome, respostas) 
-           VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-          [
-            (body.empresa || "").trim(),
-            (body.setor || "").trim(),
-            (body.funcao || "").trim(),
-            (body.nome || "").trim(),
-            body.respostas
-          ]
-        );
-        const row = result.rows[0];
+      if (sql) {
+        const rows = await sql`
+          INSERT INTO responses (empresa, setor, funcao, nome, respostas) 
+          VALUES (
+            ${(body.empresa || "").trim()}, 
+            ${(body.setor || "").trim()}, 
+            ${(body.funcao || "").trim()}, 
+            ${(body.nome || "").trim()}, 
+            ${body.respostas}
+          ) RETURNING *
+        `;
+        const row = rows[0];
         const newResponse = {
           id: row.id,
           empresa: row.empresa,
@@ -175,9 +169,9 @@ async function startServer() {
     try {
       const id = parseInt(req.params.id, 10);
       
-      if (pool) {
-        const result = await pool.query("DELETE FROM responses WHERE id = $1 RETURNING id", [id]);
-        if (result.rowCount === 0) {
+      if (sql) {
+        const rows = await sql`DELETE FROM responses WHERE id = ${id} RETURNING id`;
+        if (rows.length === 0) {
           return res.status(404).json({ error: "Resposta não encontrada." });
         }
         res.json({ success: true });
