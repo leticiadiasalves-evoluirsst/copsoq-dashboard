@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Lock } from "lucide-react";
 
 export default function Login() {
@@ -12,6 +13,7 @@ export default function Login() {
   const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +23,7 @@ export default function Login() {
       setError("");
       setLoading(true);
       try {
-        await login(username, password);
+        await login(username, password, remember);
         setLocation("/");
       } catch (err: any) {
         setError(err.message || "Erro ao fazer login.");
@@ -29,7 +31,7 @@ export default function Login() {
         setLoading(false);
       }
     },
-    [login, username, password, setLocation]
+    [login, username, password, remember, setLocation]
   );
 
   return (
@@ -84,6 +86,17 @@ export default function Login() {
                 disabled={loading}
                 required
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="remember"
+                checked={remember}
+                onCheckedChange={(v) => setRemember(v === true)}
+                disabled={loading}
+              />
+              <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                Lembrar senha
+              </Label>
             </div>
             {error && (
               <p className="text-sm text-destructive text-center">{error}</p>

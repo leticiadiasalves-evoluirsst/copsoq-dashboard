@@ -4,7 +4,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isAdmin: boolean;
   token: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, remember?: boolean) => Promise<void>;
   logout: () => void;
 }
 
@@ -16,10 +16,8 @@ function decodeIsAdmin(token: string | null): boolean {
   if (!token) return false;
   try {
     const encodedPayload = token.split(":")[0];
-    // base64url → base64
     const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
     const payload = atob(base64);
-    // payload: username:isAdmin:expiresAt
     const parts = payload.split(":");
     return parts[parts.length - 2] === "1";
   } catch {
@@ -27,15 +25,17 @@ function decodeIsAdmin(token: string | null): boolean {
   }
 }
 
+function getStoredToken(): string | null {
+  return localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() =>
-    sessionStorage.getItem(SESSION_KEY)
-  );
+  const [token, setToken] = useState<string | null>(() => getStoredToken());
 
   const isAuthenticated = token !== null;
   const isAdmin = useMemo(() => decodeIsAdmin(token), [token]);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string, remember = false) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -46,12 +46,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error((data as any).error || "Erro ao fazer login.");
     }
     const { token: newToken } = await res.json();
-    sessionStorage.setItem(SESSION_KEY, newToken);
+    if (remember) {
+      localStorage.setItem(SESSION_KEY, newToken);
+      sessionStorage.removeItem(SESSION_KEY);
+    } else {
+      sessionStorage.setItem(SESSION_KEY, newToken);
+      localStorage.removeItem(SESSION_KEY);
+    }
     setToken(newToken);
   }, []);
 
   const logout = useCallback(() => {
     sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
     setToken(null);
   }, []);
 

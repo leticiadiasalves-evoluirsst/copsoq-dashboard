@@ -17,7 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { UserCog, Trash2, Loader2, ShieldCheck, User } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { UserCog, Trash2, Loader2, ShieldCheck, User, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 interface UserItem {
@@ -36,6 +43,11 @@ export default function UsersView() {
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // Alterar senha
+  const [changePwdUser, setChangePwdUser] = useState<UserItem | null>(null);
+  const [newPwd, setNewPwd] = useState("");
+  const [changingPwd, setChangingPwd] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -106,6 +118,33 @@ export default function UsersView() {
       setDeletingId(null);
     }
   }, [pendingDeleteId, token, fetchUsers]);
+
+  const handleChangePassword = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changePwdUser || !newPwd) return;
+    setChangingPwd(true);
+    try {
+      const res = await fetch(`/api/users/${changePwdUser.id}/password`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ password: newPwd }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as any).error || "Erro ao alterar senha.");
+      }
+      toast.success(`Senha de "${changePwdUser.username}" alterada com sucesso.`);
+      setChangePwdUser(null);
+      setNewPwd("");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao alterar senha.");
+    } finally {
+      setChangingPwd(false);
+    }
+  }, [changePwdUser, newPwd, token]);
 
   return (
     <div className="space-y-6">
@@ -202,21 +241,33 @@ export default function UsersView() {
                       </p>
                     </div>
                   </div>
-                  {!u.is_admin && (
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={deletingId === u.id}
-                      onClick={() => setPendingDeleteId(u.id)}
-                      className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => { setChangePwdUser(u); setNewPwd(""); }}
+                      className="gap-1.5 text-muted-foreground hover:text-foreground"
+                      title="Alterar senha"
                     >
-                      {deletingId === u.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Trash2 size={14} />
-                      )}
+                      <KeyRound size={14} />
                     </Button>
-                  )}
+                    {!u.is_admin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={deletingId === u.id}
+                        onClick={() => setPendingDeleteId(u.id)}
+                        className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Excluir usuário"
+                      >
+                        {deletingId === u.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={14} />
+                        )}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -224,6 +275,52 @@ export default function UsersView() {
         </CardContent>
       </Card>
 
+      {/* Dialog: Alterar Senha */}
+      <Dialog
+        open={changePwdUser !== null}
+        onOpenChange={(open) => { if (!open) { setChangePwdUser(null); setNewPwd(""); } }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Senha — {changePwdUser?.username}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleChangePassword} className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <Label htmlFor="new-pwd">Nova Senha</Label>
+              <Input
+                id="new-pwd"
+                type="password"
+                placeholder="mínimo 4 caracteres"
+                value={newPwd}
+                onChange={(e) => setNewPwd(e.target.value)}
+                disabled={changingPwd}
+                minLength={4}
+                required
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setChangePwdUser(null); setNewPwd(""); }}
+                disabled={changingPwd}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={changingPwd || newPwd.length < 4}>
+                {changingPwd ? (
+                  <><Loader2 size={14} className="animate-spin mr-2" />Salvando…</>
+                ) : (
+                  "Salvar"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar Exclusão */}
       <AlertDialog
         open={pendingDeleteId !== null}
         onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}
