@@ -5,6 +5,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { neon } from "@neondatabase/serverless";
+import nodemailer from "nodemailer";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,6 +72,80 @@ function writeUsersJson(data: any[]) {
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "changeme-secret";
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+
+// ─── E-mail (recuperação de senha) ────────────────────────────────────────
+// Configure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM e APP_URL
+// para habilitar o fluxo "Esqueci minha senha".
+const SMTP_HOST = process.env.SMTP_HOST || "";
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
+const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
+const APP_URL = (process.env.APP_URL || "").replace(/\/+$/, "");
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
+
+const mailer = SMTP_HOST
+  ? nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+    })
+  : null;
+
+if (mailer) {
+  console.log(`Recuperação de senha por e-mail habilitada (SMTP ${SMTP_HOST}:${SMTP_PORT}).`);
+} else {
+  console.log("SMTP_HOST não definida. Recuperação de senha por e-mail desabilitada.");
+}
+
+function normalizeEmail(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const email = value.trim().toLowerCase();
+  if (!email) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+function hashResetToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+// Limite simples de tentativas por IP para /api/auth/forgot-password
+const forgotAttempts = new Map<string, { count: number; resetAt: number }>();
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = forgotAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    forgotAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > 5;
+}
+
+async function sendResetEmail(to: string, username: string, token: string, baseUrl: string) {
+  if (!mailer) throw new Error("SMTP não configurado.");
+  const link = `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+  await mailer.sendMail({
+    from: SMTP_FROM,
+    to,
+    subject: "Redefinição de senha — Painel de Avaliação Psicossocial",
+    text:
+      `Olá, ${username}.\n\n` +
+      `Recebemos um pedido para redefinir a senha da sua conta no Painel de Avaliação Psicossocial.\n\n` +
+      `Para criar uma nova senha, acesse o link abaixo (válido por 1 hora):\n${link}\n\n` +
+      `Se você não fez este pedido, ignore este e-mail. Sua senha continuará a mesma.`,
+    html:
+      `<p>Olá, <strong>${username}</strong>.</p>` +
+      `<p>Recebemos um pedido para redefinir a senha da sua conta no <strong>Painel de Avaliação Psicossocial</strong>.</p>` +
+      `<p>Para criar uma nova senha, clique no botão abaixo (válido por 1 hora):</p>` +
+      `<p><a href="${link}" style="display:inline-block;padding:10px 18px;background:#0f172a;color:#fff;text-decoration:none;border-radius:6px">Redefinir senha</a></p>` +
+      `<p style="font-size:12px;color:#64748b">Se o botão não funcionar, copie e cole este endereço no navegador:<br>${link}</p>` +
+      `<p style="font-size:12px;color:#64748b">Se você não fez este pedido, ignore este e-mail. Sua senha continuará a mesma.</p>`,
+  });
+}
 const TOKEN_TTL_MS = 8 * 60 * 60 * 1000; // 8 horas
 
 function hashPassword(password: string, salt: string): string {
@@ -146,12 +221,13 @@ async function initDb() {
       const hash = hashPassword(ADMIN_PASSWORD, salt);
       if (!existing) {
         const newId = users.length > 0 ? Math.max(...users.map((u: any) => u.id)) + 1 : 1;
-        users.push({ id: newId, username: ADMIN_USER, password_hash: hash, salt, is_admin: true });
+        users.push({ id: newId, username: ADMIN_USER, password_hash: hash, salt, is_admin: true, email: ADMIN_EMAIL || null });
         writeUsersJson(users);
       } else if (existing.is_admin) {
         // Update admin password on startup
         existing.password_hash = hash;
         existing.salt = salt;
+        if (ADMIN_EMAIL) existing.email = ADMIN_EMAIL;
         writeUsersJson(users);
       }
     }
@@ -180,6 +256,10 @@ async function initDb() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
     `;
+    // Colunas para recuperação de senha (idempotente)
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash TEXT`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires BIGINT`;
     // Seed admin user from env vars
     if (ADMIN_PASSWORD) {
       const salt = generateSalt();
@@ -190,6 +270,9 @@ async function initDb() {
         ON CONFLICT (username) DO UPDATE SET password_hash = ${hash}, salt = ${salt}, is_admin = true
         WHERE users.is_admin = true
       `;
+      if (ADMIN_EMAIL) {
+        await sql`UPDATE users SET email = ${ADMIN_EMAIL} WHERE username = ${ADMIN_USER} AND is_admin = true`;
+      }
     }
     console.log("Tabelas verificadas/criadas com sucesso no PostgreSQL.");
   } catch (err) {
@@ -238,14 +321,124 @@ async function startServer() {
     }
   });
 
+  // GET /api/auth/reset-available — Informa se a recuperação por e-mail está habilitada
+  app.get("/api/auth/reset-available", (_req, res) => {
+    res.json({ available: mailer !== null });
+  });
+
+  // POST /api/auth/forgot-password — Enviar e-mail de redefinição de senha
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    if (!mailer) {
+      return res.status(503).json({
+        error: "A recuperação de senha por e-mail não está configurada. Contate o administrador do painel.",
+      });
+    }
+    const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() || req.ip || "unknown";
+    if (isRateLimited(ip)) {
+      return res.status(429).json({ error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." });
+    }
+    const { identifier } = req.body || {};
+    if (typeof identifier !== "string" || !identifier.trim()) {
+      return res.status(400).json({ error: "Informe seu usuário ou e-mail." });
+    }
+    const genericMessage =
+      "Se existir uma conta com este usuário ou e-mail cadastrado, enviaremos um link de redefinição de senha.";
+    const ident = identifier.trim();
+    const identEmail = ident.toLowerCase();
+    try {
+      let user: any = null;
+      if (sql) {
+        const rows = await sql`
+          SELECT id, username, email FROM users
+          WHERE username = ${ident} OR LOWER(email) = ${identEmail}
+          LIMIT 1
+        `;
+        user = rows[0] || null;
+      } else {
+        const users = readUsersJson();
+        user =
+          users.find((u: any) => u.username === ident || (u.email && u.email.toLowerCase() === identEmail)) || null;
+      }
+      // Resposta genérica para não revelar quais contas existem
+      if (!user || !user.email) {
+        return res.json({ success: true, message: genericMessage });
+      }
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = hashResetToken(token);
+      const expiresAt = Date.now() + RESET_TOKEN_TTL_MS;
+      if (sql) {
+        await sql`UPDATE users SET reset_token_hash = ${tokenHash}, reset_token_expires = ${expiresAt} WHERE id = ${user.id}`;
+      } else {
+        const users = readUsersJson();
+        const idx = users.findIndex((u: any) => u.id === user.id);
+        if (idx !== -1) {
+          users[idx].reset_token_hash = tokenHash;
+          users[idx].reset_token_expires = expiresAt;
+          writeUsersJson(users);
+        }
+      }
+      const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0] || req.protocol;
+      const baseUrl = APP_URL || `${proto}://${req.get("host")}`;
+      await sendResetEmail(user.email, user.username, token, baseUrl);
+      res.json({ success: true, message: genericMessage });
+    } catch (err) {
+      console.error("Erro POST /api/auth/forgot-password:", err);
+      res.status(500).json({ error: "Não foi possível enviar o e-mail de redefinição. Tente novamente mais tarde." });
+    }
+  });
+
+  // POST /api/auth/reset-password — Definir nova senha a partir do token
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const { token, password } = req.body || {};
+    if (typeof token !== "string" || !token) {
+      return res.status(400).json({ error: "Link de redefinição inválido." });
+    }
+    if (typeof password !== "string" || password.length < 4) {
+      return res.status(400).json({ error: "Senha deve ter pelo menos 4 caracteres." });
+    }
+    const tokenHash = hashResetToken(token);
+    const invalid = { error: "Link de redefinição inválido ou expirado. Solicite um novo." };
+    try {
+      const salt = generateSalt();
+      const hash = hashPassword(password, salt);
+      if (sql) {
+        const rows = await sql`SELECT id, reset_token_expires FROM users WHERE reset_token_hash = ${tokenHash} LIMIT 1`;
+        const user = rows[0];
+        if (!user || !user.reset_token_expires || Date.now() > Number(user.reset_token_expires)) {
+          return res.status(400).json(invalid);
+        }
+        await sql`
+          UPDATE users SET password_hash = ${hash}, salt = ${salt}, reset_token_hash = NULL, reset_token_expires = NULL
+          WHERE id = ${user.id}
+        `;
+      } else {
+        const users = readUsersJson();
+        const idx = users.findIndex((u: any) => u.reset_token_hash === tokenHash);
+        const user = idx !== -1 ? users[idx] : null;
+        if (!user || !user.reset_token_expires || Date.now() > Number(user.reset_token_expires)) {
+          return res.status(400).json(invalid);
+        }
+        users[idx].password_hash = hash;
+        users[idx].salt = salt;
+        delete users[idx].reset_token_hash;
+        delete users[idx].reset_token_expires;
+        writeUsersJson(users);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Erro POST /api/auth/reset-password:", err);
+      res.status(500).json({ error: "Erro ao redefinir senha." });
+    }
+  });
+
   // GET /api/users — Listar usuários (admin only)
   app.get("/api/users", requireAdmin, async (_req, res) => {
     try {
       if (sql) {
-        const rows = await sql`SELECT id, username, is_admin, created_at FROM users ORDER BY id ASC`;
+        const rows = await sql`SELECT id, username, email, is_admin, created_at FROM users ORDER BY id ASC`;
         res.json(rows);
       } else {
-        const users = readUsersJson().map(({ id, username, is_admin, created_at }: any) => ({ id, username, is_admin, created_at }));
+        const users = readUsersJson().map(({ id, username, email, is_admin, created_at }: any) => ({ id, username, email: email || null, is_admin, created_at }));
         res.json(users);
       }
     } catch (err) {
@@ -255,18 +448,22 @@ async function startServer() {
 
   // POST /api/users — Criar usuário (admin only)
   app.post("/api/users", requireAdmin, async (req, res) => {
-    const { username, password } = req.body || {};
+    const { username, password, email: rawEmail } = req.body || {};
     if (!username || !password || typeof username !== "string" || typeof password !== "string") {
       return res.status(400).json({ error: "Usuário e senha são obrigatórios." });
+    }
+    const email = normalizeEmail(rawEmail);
+    if (rawEmail && typeof rawEmail === "string" && rawEmail.trim() && !email) {
+      return res.status(400).json({ error: "E-mail inválido." });
     }
     const salt = generateSalt();
     const hash = hashPassword(password, salt);
     try {
       if (sql) {
         const rows = await sql`
-          INSERT INTO users (username, password_hash, salt, is_admin)
-          VALUES (${username.trim()}, ${hash}, ${salt}, false)
-          RETURNING id, username, is_admin, created_at
+          INSERT INTO users (username, password_hash, salt, is_admin, email)
+          VALUES (${username.trim()}, ${hash}, ${salt}, false, ${email})
+          RETURNING id, username, email, is_admin, created_at
         `;
         res.status(201).json(rows[0]);
       } else {
@@ -275,10 +472,10 @@ async function startServer() {
           return res.status(409).json({ error: "Usuário já existe." });
         }
         const newId = users.length > 0 ? Math.max(...users.map((u: any) => u.id)) + 1 : 1;
-        const newUser = { id: newId, username: username.trim(), password_hash: hash, salt, is_admin: false, created_at: new Date().toISOString() };
+        const newUser = { id: newId, username: username.trim(), password_hash: hash, salt, is_admin: false, email, created_at: new Date().toISOString() };
         users.push(newUser);
         writeUsersJson(users);
-        res.status(201).json({ id: newUser.id, username: newUser.username, is_admin: newUser.is_admin, created_at: newUser.created_at });
+        res.status(201).json({ id: newUser.id, username: newUser.username, email: newUser.email, is_admin: newUser.is_admin, created_at: newUser.created_at });
       }
     } catch (err: any) {
       if (err?.code === "23505") return res.status(409).json({ error: "Usuário já existe." });
@@ -306,6 +503,34 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: "Erro ao excluir usuário." });
+    }
+  });
+
+  // PATCH /api/users/:id/email — Definir e-mail de recuperação (admin only)
+  app.patch("/api/users/:id/email", requireAdmin, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const { email: rawEmail } = req.body || {};
+    const email = normalizeEmail(rawEmail);
+    const clearing = rawEmail == null || (typeof rawEmail === "string" && !rawEmail.trim());
+    if (!clearing && !email) {
+      return res.status(400).json({ error: "E-mail inválido." });
+    }
+    const value = clearing ? null : email;
+    try {
+      if (sql) {
+        const rows = await sql`SELECT id FROM users WHERE id = ${id}`;
+        if (!rows[0]) return res.status(404).json({ error: "Usuário não encontrado." });
+        await sql`UPDATE users SET email = ${value} WHERE id = ${id}`;
+      } else {
+        const users = readUsersJson();
+        const idx = users.findIndex((u: any) => u.id === id);
+        if (idx === -1) return res.status(404).json({ error: "Usuário não encontrado." });
+        users[idx].email = value;
+        writeUsersJson(users);
+      }
+      res.json({ success: true, email: value });
+    } catch (err) {
+      res.status(500).json({ error: "Erro ao atualizar e-mail." });
     }
   });
 

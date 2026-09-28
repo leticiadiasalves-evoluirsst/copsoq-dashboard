@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
+import ForgotPasswordDialog from "@/components/ForgotPasswordDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ export default function Login() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -111,9 +113,24 @@ export default function Login() {
                 "Entrar"
               )}
             </Button>
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setForgotOpen(true)}
+                disabled={loading}
+                className="text-sm text-primary hover:underline underline-offset-4 disabled:opacity-50"
+              >
+                Esqueci minha senha
+              </button>
+            </div>
           </form>
         </CardContent>
       </Card>
+      <ForgotPasswordDialog
+        open={forgotOpen}
+        onOpenChange={setForgotOpen}
+        initialIdentifier={username}
+      />
     </div>
   );
 }

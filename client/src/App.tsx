@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import Questionario from "@/pages/Questionario";
 import Login from "@/pages/Login";
+import ResetPassword from "@/pages/ResetPassword";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -29,6 +30,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={ProtectedHome} />
       <Route path={"/login"} component={Login} />
+      <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/questionario"} component={Questionario} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
