@@ -24,12 +24,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { UserCog, Trash2, Loader2, ShieldCheck, User, KeyRound } from "lucide-react";
+import { Trash2, Loader2, ShieldCheck, User, KeyRound, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 interface UserItem {
   id: number;
   username: string;
+  email: string | null;
   is_admin: boolean;
   created_at: string;
 }
@@ -40,6 +41,7 @@ export default function UsersView() {
   const [loading, setLoading] = useState(true);
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [creating, setCreating] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -48,6 +50,11 @@ export default function UsersView() {
   const [changePwdUser, setChangePwdUser] = useState<UserItem | null>(null);
   const [newPwd, setNewPwd] = useState("");
   const [changingPwd, setChangingPwd] = useState(false);
+
+  // Alterar e-mail de recuperação
+  const [changeEmailUser, setChangeEmailUser] = useState<UserItem | null>(null);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [changingEmail, setChangingEmail] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -80,7 +87,7 @@ export default function UsersView() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ username: newUsername.trim(), password: newPassword }),
+        body: JSON.stringify({ username: newUsername.trim(), password: newPassword, email: newEmail.trim() || null }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -89,13 +96,14 @@ export default function UsersView() {
       toast.success(`Usuário "${newUsername.trim()}" criado com sucesso.`);
       setNewUsername("");
       setNewPassword("");
+      setNewEmail("");
       await fetchUsers();
     } catch (err: any) {
       toast.error(err.message || "Erro ao criar usuário.");
     } finally {
       setCreating(false);
     }
-  }, [newUsername, newPassword, token, fetchUsers]);
+  }, [newUsername, newPassword, newEmail, token, fetchUsers]);
 
   const handleDelete = useCallback(async () => {
     if (pendingDeleteId == null) return;
@@ -146,6 +154,38 @@ export default function UsersView() {
     }
   }, [changePwdUser, newPwd, token]);
 
+  const handleChangeEmail = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changeEmailUser) return;
+    setChangingEmail(true);
+    try {
+      const res = await fetch(`/api/users/${changeEmailUser.id}/email`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email: emailDraft.trim() || null }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as any).error || "Erro ao atualizar e-mail.");
+      }
+      toast.success(
+        emailDraft.trim()
+          ? `E-mail de "${changeEmailUser.username}" atualizado com sucesso.`
+          : `E-mail de "${changeEmailUser.username}" removido.`
+      );
+      setChangeEmailUser(null);
+      setEmailDraft("");
+      await fetchUsers();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao atualizar e-mail.");
+    } finally {
+      setChangingEmail(false);
+    }
+  }, [changeEmailUser, emailDraft, token, fetchUsers]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -166,6 +206,7 @@ export default function UsersView() {
           <CardTitle className="text-base">Novo Usuário</CardTitle>
           <CardDescription>
             Usuários criados aqui podem acessar o painel mas não podem excluir respondentes.
+            O e-mail é usado para a recuperação de senha ("Esqueci minha senha").
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -192,6 +233,17 @@ export default function UsersView() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={creating}
                 required
+              />
+            </div>
+            <div className="flex-1 space-y-1">
+              <Label htmlFor="new-email">E-mail (opcional)</Label>
+              <Input
+                id="new-email"
+                type="email"
+                placeholder="para recuperar a senha"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                disabled={creating}
               />
             </div>
             <div className="flex items-end">
@@ -238,10 +290,25 @@ export default function UsersView() {
                       <p className="text-sm font-medium text-foreground">{u.username}</p>
                       <p className="text-xs text-muted-foreground">
                         {u.is_admin ? "Administrador" : "Usuário"}
+                        {" · "}
+                        {u.email ? (
+                          <span>{u.email}</span>
+                        ) : (
+                          <span className="italic">sem e-mail de recuperação</span>
+                        )}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setChangeEmailUser(u); setEmailDraft(u.email || ""); }}
+                      className="gap-1.5 text-muted-foreground hover:text-foreground"
+                      title="Alterar e-mail de recuperação"
+                    >
+                      <Mail size={14} />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -310,6 +377,52 @@ export default function UsersView() {
               </Button>
               <Button type="submit" disabled={changingPwd || newPwd.length < 4}>
                 {changingPwd ? (
+                  <><Loader2 size={14} className="animate-spin mr-2" />Salvando…</>
+                ) : (
+                  "Salvar"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Alterar E-mail */}
+      <Dialog
+        open={changeEmailUser !== null}
+        onOpenChange={(open) => { if (!open) { setChangeEmailUser(null); setEmailDraft(""); } }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>E-mail de recuperação — {changeEmailUser?.username}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleChangeEmail} className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <Label htmlFor="email-draft">E-mail</Label>
+              <Input
+                id="email-draft"
+                type="email"
+                placeholder="deixe em branco para remover"
+                value={emailDraft}
+                onChange={(e) => setEmailDraft(e.target.value)}
+                disabled={changingEmail}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Usado pelo botão "Esqueci minha senha" na tela de login.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { setChangeEmailUser(null); setEmailDraft(""); }}
+                disabled={changingEmail}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={changingEmail}>
+                {changingEmail ? (
                   <><Loader2 size={14} className="animate-spin mr-2" />Salvando…</>
                 ) : (
                   "Salvar"
